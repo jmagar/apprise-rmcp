@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.1.1] — 2026-06-01
+
+### Changed
+
+- Plugin `SessionStart`/`ConfigChange` hooks now call `${CLAUDE_PLUGIN_ROOT}/bin/rapprise setup plugin-hook` directly instead of going through the `plugin-setup.sh` shell wrapper. The env-var mapping the script performed (`CLAUDE_PLUGIN_OPTION_*` → `APPRISE_*`) now lives in `apply_plugin_options()` in `src/cli.rs`, called before `Config::load()` in the setup branch of `main` (apprise is template-style: the setup check validates the pre-loaded config). The `CLAUDE_PLUGIN_DATA` → `APPRISE_HOME` re-export was dropped (redundant: `setup_data_dir()` reads `CLAUDE_PLUGIN_DATA` natively).
+
+### Removed
+
+- `plugins/apprise/hooks/plugin-setup.sh` — the wrapper was a pure env-mapping middleman now handled by the binary's `setup plugin-hook` command.
+
 ## [0.1.0] — 2026-05-13
 
 ### Added

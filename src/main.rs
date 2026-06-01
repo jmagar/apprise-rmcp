@@ -111,6 +111,11 @@ async fn run_cli(args: Vec<String>) -> Result<()> {
 
     let parsed = cli::CliCommand::parse(&filtered)?;
     if let cli::CliCommand::Setup(command) = parsed {
+        // Translate CLAUDE_PLUGIN_OPTION_* into APPRISE_* env vars BEFORE
+        // Config::load() so the plugin hook can call the binary directly (no
+        // plugin-setup.sh wrapper). apprise is template-style: the setup check
+        // validates the pre-loaded &Config, so this must precede the load.
+        cli::apply_plugin_options();
         let config = Config::load()?;
         return cli::run_setup(&config, command).await;
     }

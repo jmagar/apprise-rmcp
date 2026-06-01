@@ -99,6 +99,6 @@ bd close <id>         # Complete work
 
 ## Plugin setup hooks
 
-Plugin setup is owned by the binary. Keep `plugins/apprise/hooks/plugin-setup.sh` as a thin adapter that maps `CLAUDE_PLUGIN_OPTION_*` values to environment variables, prepares appdata, ensures `apprise` is on `PATH`, and then calls `apprise setup plugin-hook "$@"`.
+Plugin setup is owned by the binary. `plugins/apprise/hooks/hooks.json` calls `${CLAUDE_PLUGIN_ROOT}/bin/rapprise setup plugin-hook` directly (no shell wrapper). The binary's `apply_plugin_options()` (`src/cli.rs`), called before `Config::load()` in the setup branch of `main` (apprise is template-style — the setup check validates the pre-loaded `&Config`), maps `CLAUDE_PLUGIN_OPTION_*` values to the binary's `APPRISE_*` env vars; `install_self()` self-installs the binary into `~/.local/bin`.
 
-`apprise setup check` is read-only, `apprise setup repair` is idempotent, and `apprise setup plugin-hook --no-repair` is audit mode. Do not add Docker Compose, systemd, or service bootstrap logic back into the hook script.
+`apprise setup check` is read-only, `apprise setup repair` is idempotent, and `apprise setup plugin-hook --no-repair` is audit mode. Do not add Docker Compose, systemd, or service bootstrap logic into the hook path.
