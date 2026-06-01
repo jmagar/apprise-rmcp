@@ -3,7 +3,7 @@
 # Runs as root, validates config, then exec's the service as 1000:1000
 set -e
 
-SERVICE_NAME="apprise"
+SERVICE_NAME="rapprise"
 BINARY="/usr/local/bin/${SERVICE_NAME}"
 
 DATA_DIR="${DATA_DIR:-/data}"

@@ -20,8 +20,8 @@ test:
     cargo test
 
 install: release
-    install -m 755 target/release/apprise ~/.local/bin/apprise
-    @echo "Installed to ~/.local/bin/apprise"
+    install -m 755 target/release/rapprise ~/.local/bin/rapprise
+    @echo "Installed to ~/.local/bin/rapprise"
 
 docker-up:
     docker compose up -d
@@ -74,7 +74,7 @@ validate-skills:
 validate-plugin: validate-skills
 
 runtime-current:
-    bash scripts/check-runtime-current.sh --unit apprise-mcp.service --service apprise-mcp --expected-binary target/release/apprise
+    bash scripts/check-runtime-current.sh --unit apprise-mcp.service --service apprise-mcp --expected-binary target/release/rapprise
 
 # Generate a standalone CLI for this server (requires running server; HTTP-only transport)
 generate-cli:
@@ -109,12 +109,12 @@ build-plugin: release
     #!/bin/sh
     set -eu
     target_dir="${CARGO_TARGET_DIR:-target}"
-    if [ ! -x "$target_dir/release/apprise" ] && [ -x ".cache/cargo/release/apprise" ]; then
+    if [ ! -x "$target_dir/release/rapprise" ] && [ -x ".cache/cargo/release/rapprise" ]; then
       target_dir=".cache/cargo"
     fi
     mkdir -p bin plugins/apprise/bin
-    install -m 755 "$target_dir/release/apprise" bin/apprise
-    install -m 755 "$target_dir/release/apprise" plugins/apprise/bin/apprise
+    install -m 755 "$target_dir/release/rapprise" bin/rapprise
+    install -m 755 "$target_dir/release/rapprise" plugins/apprise/bin/rapprise
 
 # Publish: bump version, tag, push (triggers crates.io + Docker publish)
 publish bump="patch":

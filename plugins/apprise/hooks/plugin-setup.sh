@@ -23,20 +23,20 @@ export_if_set() {
   export "${env_name}=${value}"
 }
 
-ensure_apprise_binary() {
-  if command -v apprise >/dev/null 2>&1; then
+ensure_rapprise_binary() {
+  if command -v rapprise >/dev/null 2>&1; then
     return 0
   fi
 
-  local bundled="${CLAUDE_PLUGIN_ROOT}/bin/apprise"
+  local bundled="${CLAUDE_PLUGIN_ROOT}/bin/rapprise"
   if [[ -x "${bundled}" ]]; then
     mkdir -p "${HOME}/.local/bin"
-    ln -sf "${bundled}" "${HOME}/.local/bin/apprise"
+    ln -sf "${bundled}" "${HOME}/.local/bin/rapprise"
     export PATH="${HOME}/.local/bin:${PATH}"
   fi
 
-  command -v apprise >/dev/null 2>&1 || {
-    printf 'apprise plugin setup: apprise binary not found on PATH or at %s\n' "${bundled}" >&2
+  command -v rapprise >/dev/null 2>&1 || {
+    printf 'apprise plugin setup: rapprise binary not found on PATH or at %s\n' "${bundled}" >&2
     exit 1
   }
 }
@@ -57,8 +57,8 @@ main() {
   chmod 700 "${APPRISE_HOME}" 2>/dev/null || true
   export CLAUDE_PLUGIN_DATA APPRISE_HOME
 
-  ensure_apprise_binary
-  apprise setup plugin-hook "$@"
+  ensure_rapprise_binary
+  rapprise setup plugin-hook "$@"
 }
 
 main "$@"

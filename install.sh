@@ -4,7 +4,7 @@
 set -euo pipefail
 
 INSTALL_DIR="${HOME}/.local/bin"
-BINARY_NAME="apprise"
+BINARY_NAME="rapprise"
 
 # ── Detect platform ───────────────────────────────────────────────────────────
 OS="$(uname -s)"

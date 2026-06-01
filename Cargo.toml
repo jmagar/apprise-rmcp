@@ -11,7 +11,7 @@ description = "Apprise MCP server — universal push notification bridge"
 autobins = false
 
 [[bin]]
-name = "apprise"
+name = "rapprise"
 path = "src/main.rs"
 
 [dependencies]

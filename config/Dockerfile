@@ -20,14 +20,14 @@ RUN --mount=type=cache,id=apprise-cargo-registry,target=/usr/local/cargo/registr
     --mount=type=cache,id=apprise-cargo-git,target=/usr/local/cargo/git,sharing=locked \
     --mount=type=cache,id=apprise-cargo-target,target=/app/target,sharing=locked \
     touch src/main.rs && cargo build --release --locked -p apprise-mcp && \
-    cp target/release/apprise /usr/local/bin/apprise
+    cp target/release/rapprise /usr/local/bin/rapprise
 
 # ── Runtime image ─────────────────────────────────────────────────────────────
 FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y ca-certificates curl gosu && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /usr/local/bin/apprise /usr/local/bin/apprise
+COPY --from=builder /usr/local/bin/rapprise /usr/local/bin/rapprise
 
 RUN groupadd --gid 1000 apprise && \
     useradd --uid 1000 --gid apprise --no-create-home --shell /sbin/nologin apprise && \
