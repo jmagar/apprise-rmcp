@@ -209,8 +209,8 @@ impl SetupReport {
 /// script's `reject_unsafe_value` guard.
 ///
 /// No `CLAUDE_PLUGIN_DATA` → `APPRISE_HOME` mapping is needed: `setup_data_dir()`
-/// already reads `CLAUDE_PLUGIN_DATA` natively (the script's `APPRISE_HOME`
-/// re-export was redundant).
+/// resolves the canonical `~/.apprise/` appdata dir (honoring an explicit
+/// `APPRISE_HOME` override) — the same place the binary loads `.env` from.
 pub fn apply_plugin_options() {
     // CLAUDE_PLUGIN_OPTION_<OPT> -> <APPRISE_ENVVAR>
     let map = [
@@ -417,8 +417,11 @@ fn check_setup_port(port: u16, report: &mut SetupReport) {
 }
 
 fn setup_data_dir() -> PathBuf {
-    std::env::var_os("CLAUDE_PLUGIN_DATA")
-        .or_else(|| std::env::var_os("APPRISE_HOME"))
+    // Canonical service appdata dir (~/.apprise/ or /data) — the same location the
+    // binary loads `.env` from (`config::load_dotenv`), so the plugin hook's writes
+    // and the server's reads always agree. An explicit `APPRISE_HOME` override is
+    // honored; `CLAUDE_PLUGIN_DATA` is intentionally NOT consulted.
+    std::env::var_os("APPRISE_HOME")
         .map(PathBuf::from)
         .unwrap_or_else(apprise_mcp::config::default_data_dir)
 }
