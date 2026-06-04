@@ -8,7 +8,8 @@ description: >
   or "let me know when X is done". Covers three tiers: MCP tool (preferred), CLI binary, and
   direct REST API curl calls. Trigger phrases include: send notification, push alert, Apprise
   notify, send push notification, alert via Apprise, notify service, send alert, notify via
-  apprise, ping me, fire an alert.
+  apprise, ping me, fire an alert, send a Slack notification, Discord alert, Telegram message,
+  send me an email, notify via Pushover, route to Slack/Discord/Telegram/email/PagerDuty.
 ---
 
 # Apprise — Universal Push Notifications
@@ -96,24 +97,24 @@ apprise(action="help")
 
 ## Tier 2 (Fallback): CLI Binary
 
-Binary: `/home/jmagar/workspace/apprise-mcp/target/release/apprise`
+Binary: `/home/jmagar/workspace/apprise-mcp/target/release/rapprise`
 
 ```bash
 # Notify a tag group
-apprise notify "Disk at 95%" --tag servers --title "Disk Warning" --type warning
+rapprise notify "Disk at 95%" --tag servers --title "Disk Warning" --type warning
 
 # Notify all configured services
-apprise notify "Deploy complete" --title "CI/CD" --type success
+rapprise notify "Deploy complete" --title "CI/CD" --type success
 
 # Simple notification (type defaults to info)
-apprise notify "Backup done"
+rapprise notify "Backup done"
 
 # Stateless one-off via URL schema
-apprise notify-url "slack://tokenA/tokenB/tokenC" "Build failed" --title "CI" --type failure
-apprise notify-url "discord://webhook_id/token" "Deploy done" --type success
+rapprise notify-url "slack://tokenA/tokenB/tokenC" "Build failed" --title "CI" --type failure
+rapprise notify-url "discord://webhook_id/token" "Deploy done" --type success
 
 # Health check
-apprise health
+rapprise health
 ```
 
 **Type aliases accepted:** `warn` → warning, `fail`/`error` → failure

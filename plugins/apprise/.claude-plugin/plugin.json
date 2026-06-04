@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "apprise",
-  "description": "Send push notifications via apprise-mcp \u2014 a Rust MCP bridge to the Apprise universal notification library (Slack, Discord, email, Telegram, and 100+ services).",
+  "description": "Send push notifications via apprise-mcp — a Rust MCP bridge to the Apprise universal notification library (Slack, Discord, email, Telegram, and 100+ services).",
   "author": {
     "name": "jmagar"
   },
@@ -14,13 +14,12 @@
     "alerts",
     "mcp"
   ],
-  "mcpServers": "./.mcp.json",
   "skills": "./skills",
   "userConfig": {
     "server_url": {
       "type": "string",
       "title": "MCP server URL",
-      "description": "Base URL the MCP client connects to, e.g. http://localhost:8765. The plugin appends /mcp \u2014 do NOT include a trailing /mcp path.",
+      "description": "Base URL the MCP client connects to, e.g. http://localhost:8765. The plugin appends /mcp — do NOT include a trailing /mcp path.",
       "required": true,
       "default": "http://localhost:8765"
     },

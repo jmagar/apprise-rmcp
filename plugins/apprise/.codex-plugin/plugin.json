@@ -1,6 +1,6 @@
 {
   "name": "apprise-mcp",
-  "description": "Apprise MCP server \u2014 universal push notification bridge for Codex.",
+  "description": "Apprise MCP server — universal push notification bridge for Codex.",
   "homepage": "https://github.com/jmagar/apprise-mcp",
   "repository": "https://github.com/jmagar/apprise-mcp",
   "license": "MIT",
@@ -13,7 +13,6 @@
     "homelab"
   ],
   "skills": "./skills/",
-  "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Apprise MCP",
     "shortDescription": "Send push notifications via 80+ services",
