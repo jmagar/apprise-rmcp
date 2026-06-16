@@ -182,6 +182,12 @@ async fn build_oauth_state(config: &Config) -> Result<lab_auth::state::AuthState
                 auth.admin_email.clone(),
             ));
         }
+        if !auth.allowed_client_redirect_uris.is_empty() {
+            v.push((
+                "APPRISE_MCP_AUTH_ALLOWED_REDIRECT_URIS".into(),
+                auth.allowed_client_redirect_uris.join(","),
+            ));
+        }
         v.push((
             "APPRISE_MCP_AUTH_SQLITE_PATH".into(),
             auth.sqlite_path.clone(),
@@ -196,6 +202,7 @@ async fn build_oauth_state(config: &Config) -> Result<lab_auth::state::AuthState
         .scopes_supported(vec!["apprise:notify".into(), "apprise:admin".into()])
         .default_scope("apprise:notify")
         .resource_path("/mcp")
+        .enable_dynamic_registration(true)
         .build_from_sources(vars)
         .map_err(|e| anyhow::anyhow!("failed to build auth config: {e}"))?;
 

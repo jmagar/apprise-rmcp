@@ -220,6 +220,10 @@ impl Config {
             &mut config.mcp.allowed_origins,
         );
         env_opt_str("APPRISE_MCP_PUBLIC_URL", &mut config.mcp.auth.public_url);
+        env_list(
+            "APPRISE_MCP_AUTH_ALLOWED_REDIRECT_URIS",
+            &mut config.mcp.auth.allowed_client_redirect_uris,
+        );
         env_str(
             "APPRISE_MCP_AUTH_ADMIN_EMAIL",
             &mut config.mcp.auth.admin_email,
