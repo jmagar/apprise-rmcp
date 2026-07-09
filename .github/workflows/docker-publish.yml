@@ -7,7 +7,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: jmagar/apprise-mcp
+  IMAGE_NAME: jmagar/apprise-rmcp
 
 jobs:
   build-and-push:

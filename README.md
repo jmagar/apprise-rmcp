@@ -1,17 +1,43 @@
-# apprise-mcp
+# apprise-rmcp
 
 MCP server and CLI for [Apprise](https://github.com/caronc/apprise) — a universal push notification library that supports 80+ services (Slack, Discord, PagerDuty, Gotify, ntfy, Telegram, email, and many more).
 
+
+## npm / npx
+
+Run the stdio MCP server or CLI without a manual binary install:
+
+```bash
+npx -y apprise-rmcp --help
+```
+
+MCP clients can use the same launcher:
+
+```json
+{
+  "mcpServers": {
+    "apprise-rmcp": {
+      "command": "npx",
+      "args": ["-y", "apprise-rmcp"]
+    }
+  }
+}
+```
+
+The npm package downloads the `rapprise` binary from GitHub Releases during `postinstall` and keeps the release tag aligned with `packages/apprise-rmcp/package.json`.
+
+Naming follows the rmcp family convention: the repo is `<service>-rmcp`, the npm package is `<service>-rmcp`, and the installed CLI/binary is `r<service>`. For this service that means repo/package `apprise-rmcp` and CLI `rapprise`.
+
 ## What it does
 
-`apprise-mcp` bridges Claude (and any MCP client) to an Apprise API server so that AI agents can send push notifications as part of their workflows — alerts, status updates, job completions, incident reports.
+`apprise-rmcp` bridges Claude (and any MCP client) to an Apprise API server so that AI agents can send push notifications as part of their workflows — alerts, status updates, job completions, incident reports.
 
 ## Architecture
 
 ```
 Claude / MCP client
         |
-   apprise-mcp (this server)
+   apprise-rmcp (this server)
         |  HTTP REST
    Apprise API server   (http://your-host:8766)
         |
@@ -93,7 +119,7 @@ apprise health --json
 
 # MCP modes
 apprise serve      # HTTP MCP server (default)
-apprise mcp        # stdio MCP transport
+rapprise mcp       # stdio MCP transport
 ```
 
 ## Environment variables
@@ -142,4 +168,4 @@ Quick start with Docker:
 docker run -p 8000:8000 caronc/apprise:latest
 ```
 
-The API server lets you pre-configure notification services under named tags via its web UI or REST API, then notify them by tag from `apprise-mcp`.
+The API server lets you pre-configure notification services under named tags via its web UI or REST API, then notify them by tag from `apprise-rmcp`.

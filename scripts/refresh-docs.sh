@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# refresh-docs.sh — Refresh reference docs for apprise-mcp
+# refresh-docs.sh — Refresh reference docs for apprise-rmcp
 # Pattern: §38 — Crawls Apprise docs + packs Apprise repos
 # Usage: scripts/refresh-docs.sh [--dry-run] [--skip-crawl] [--skip-repomix]
 #
@@ -63,7 +63,7 @@ write_index() {
   [[ -d "$REF_DIR/apprise/docs" ]] && a="$(find "$REF_DIR/apprise/docs" -type f|wc -l|tr -d ' ')"
   [[ -d "$REF_DIR/mcp/docs"    ]] && m="$(find "$REF_DIR/mcp/docs"    -type f|wc -l|tr -d ' ')"
   cat > "$REF_DIR/INDEX.md" <<EOF
-# Reference Index — apprise-mcp
+# Reference Index — apprise-rmcp
 | Path | Contents | Source |
 |---|---|---|
 | \`apprise/docs/\`   | Apprise wiki crawl            | github.com/caronc/apprise/wiki |
@@ -85,7 +85,7 @@ snapshot_references() {
 snapshot_paths() { awk '{$1="";sub(/^  /,"");print}' "$1"; }
 ensure_changes_file() {
   mkdir -p "$REF_DIR"; [[ -f "$CHANGES_FILE" ]] && return 0
-  printf -- '---\ntitle: Reference Refresh Log — apprise-mcp\ncreated_at: %s\n---\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$CHANGES_FILE"
+  printf -- '---\ntitle: Reference Refresh Log — apprise-rmcp\ncreated_at: %s\n---\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$CHANGES_FILE"
 }
 append_changes_log() {
   ensure_changes_file

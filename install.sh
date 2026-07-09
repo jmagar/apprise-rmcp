@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# install.sh — one-line install for apprise-mcp binary
-# Usage: curl -fsSL https://raw.githubusercontent.com/jmagar/apprise-mcp/main/install.sh | bash
+# install.sh — one-line install for apprise-rmcp binary
+# Usage: curl -fsSL https://raw.githubusercontent.com/jmagar/apprise-rmcp/main/install.sh | bash
 set -euo pipefail
 
 INSTALL_DIR="${HOME}/.local/bin"
@@ -22,13 +22,13 @@ case "${OS}-${ARCH}" in
     ;;
 esac
 
-REPO="jmagar/apprise-mcp"
+REPO="jmagar/apprise-rmcp"
 DOWNLOAD_URL="https://github.com/${REPO}/releases/latest/download/${ASSET}"
 
 # ── Install binary ────────────────────────────────────────────────────────────
 mkdir -p "${INSTALL_DIR}"
 
-echo "Downloading apprise-mcp from ${DOWNLOAD_URL} ..."
+echo "Downloading apprise-rmcp from ${DOWNLOAD_URL} ..."
 curl -fsSL --progress-bar "${DOWNLOAD_URL}" -o "${INSTALL_DIR}/${BINARY_NAME}"
 chmod +x "${INSTALL_DIR}/${BINARY_NAME}"
 
