@@ -1,0 +1,5 @@
+[advisories]
+ignore = [
+  # Inherited through lab-auth/jsonwebtoken. No fixed rsa release is available.
+  "RUSTSEC-2023-0071",
+]

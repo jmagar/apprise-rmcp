@@ -10,7 +10,7 @@
 #
 # Credentials are sourced from ~/.claude-homelab/.env:
 #   APPRISE_MCP_HOST   (default: localhost)
-#   APPRISE_MCP_PORT   (default: 8765)
+#   APPRISE_MCP_PORT   (default: 40050)
 #   APPRISE_MCP_TOKEN  (optional)
 #
 # Notify test config (optional):
@@ -128,7 +128,7 @@ load_env() {
   local host="${APPRISE_MCP_HOST:-localhost}"
   # Remap 0.0.0.0 (bind address) to localhost for outbound connections.
   [[ "${host}" == "0.0.0.0" ]] && host="localhost"
-  local port="${APPRISE_MCP_PORT:-8765}"
+  local port="${APPRISE_MCP_PORT:-40050}"
   MCP_URL="http://${host}:${port}/mcp"
 
   local token="${APPRISE_MCP_TOKEN:-}"
@@ -622,7 +622,7 @@ main() {
     log_error ""
     log_error "To diagnose:"
     log_error "  docker ps | grep apprise-mcp"
-    log_error "  curl http://localhost:8765/health"
+    log_error "  curl http://localhost:40050/health"
     log_error "  apprise serve mcp  (or just dev)"
     exit 2
   }

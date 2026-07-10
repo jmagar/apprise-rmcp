@@ -75,10 +75,10 @@ Add to Claude Desktop config (`~/.config/claude/claude_desktop_config.json`):
 
 ```bash
 APPRISE_URL=http://100.120.242.29:8766 apprise serve
-# Listening on 0.0.0.0:8765
+# Listening on 0.0.0.0:40050
 ```
 
-Then point Claude at `http://localhost:8765/mcp`.
+Then point Claude at `http://localhost:40050/mcp`.
 
 ## Configuring notification services in Apprise
 

@@ -129,7 +129,7 @@ rapprise mcp       # stdio MCP transport
 | `APPRISE_URL` | `http://localhost:8000` | Apprise API server URL |
 | `APPRISE_TOKEN` | _(empty)_ | API token (optional for open installs) |
 | `APPRISE_MCP_HOST` | `0.0.0.0` | MCP HTTP bind host |
-| `APPRISE_MCP_PORT` | `8765` | MCP HTTP bind port |
+| `APPRISE_MCP_PORT` | `40050` | MCP HTTP bind port |
 | `APPRISE_MCP_TOKEN` | _(none)_ | Static bearer token for MCP HTTP auth |
 | `RUST_LOG` | `info` | Log filter |
 

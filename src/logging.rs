@@ -17,8 +17,8 @@ pub fn init(data_dir: &Path, default_level: &str) -> anyhow::Result<()> {
     let colorize = should_colorize();
     let file_writer = RollingFileWriter::open(log_path, MAX_LOG_BYTES)?;
 
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new(default_level.to_string()));
+    let filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(default_level));
 
     tracing_subscriber::registry()
         .with(filter)
@@ -45,8 +45,8 @@ pub fn init(data_dir: &Path, default_level: &str) -> anyhow::Result<()> {
 /// data dir may not be available at startup.
 pub fn init_console(default_level: &str) {
     let colorize = should_colorize();
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new(default_level.to_string()));
+    let filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(default_level));
 
     let _ = tracing_subscriber::registry()
         .with(filter)

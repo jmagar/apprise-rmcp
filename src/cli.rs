@@ -589,13 +589,13 @@ pub async fn run_doctor(config: &Config, json: bool) -> Result<()> {
         checks.push(DoctorCheck::pass(
             "config",
             "Config file",
-            format!("~/.apprise/config.toml"),
+            "~/.apprise/config.toml",
         ));
     } else {
         checks.push(DoctorCheck::warn(
             "config",
             "Config file",
-            format!("~/.apprise/config.toml not found — create it or rely on env vars"),
+            "~/.apprise/config.toml not found — create it or rely on env vars",
         ));
     }
 
@@ -676,9 +676,7 @@ pub async fn run_doctor(config: &Config, json: bool) -> Result<()> {
         .ok()
         .filter(|v| !v.is_empty())
         .or_else(|| {
-            if !config.apprise.url.is_empty() && config.apprise.url != "http://localhost:8000" {
-                Some(config.apprise.url.clone())
-            } else if !config.apprise.url.is_empty() {
+            if !config.apprise.url.is_empty() {
                 Some(config.apprise.url.clone())
             } else {
                 None

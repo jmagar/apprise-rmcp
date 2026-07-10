@@ -236,7 +236,7 @@ Environment:
   APPRISE_URL                  Apprise API server URL (default: http://localhost:8000)
   APPRISE_TOKEN                API token (optional for open installs)
   APPRISE_MCP_HOST             Bind host (default: 0.0.0.0)
-  APPRISE_MCP_PORT             Bind port (default: 8765)
+  APPRISE_MCP_PORT             Bind port (default: 40050)
   APPRISE_MCP_NO_AUTH          Disable MCP HTTP auth (loopback only)
   APPRISE_MCP_TOKEN            Static bearer token for MCP HTTP auth
   APPRISE_MCP_AUTH_MODE        Auth mode: bearer (default) | oauth

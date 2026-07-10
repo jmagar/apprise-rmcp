@@ -45,7 +45,7 @@ Guides the agent to send a critical failure-type notification with clear title a
 | `APPRISE_URL` | `http://localhost:8000` | Apprise API server base URL |
 | `APPRISE_TOKEN` | _(empty)_ | Bearer token for Apprise API (optional) |
 | `APPRISE_MCP_HOST` | `0.0.0.0` | MCP HTTP server bind host |
-| `APPRISE_MCP_PORT` | `8765` | MCP HTTP server bind port |
+| `APPRISE_MCP_PORT` | `40050` | MCP HTTP server bind port |
 | `APPRISE_MCP_TOKEN` | _(none)_ | Static bearer token for MCP HTTP auth |
 | `APPRISE_MCP_ALLOWED_ORIGINS` | _(none)_ | Comma-separated additional CORS origins |
 | `RUST_LOG` | `info` | Tracing log filter |

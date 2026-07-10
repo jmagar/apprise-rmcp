@@ -54,7 +54,7 @@ impl Write for RollingFileWriter {
         let mut guard = self
             .inner
             .lock()
-            .map_err(|_| io::Error::new(io::ErrorKind::Other, "log mutex poisoned"))?;
+            .map_err(|_| io::Error::other("log mutex poisoned"))?;
 
         // Check size before writing; truncate if needed
         if let Ok(meta) = guard.metadata() {
@@ -64,14 +64,14 @@ impl Write for RollingFileWriter {
                 let _ = fs::write(&self.path, b"");
                 let file = OpenOptions::new()
                     .create(true)
+                    .truncate(true)
                     .write(true)
                     .open(&self.path)
-                    .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+                    .map_err(io::Error::other)?;
                 *self
                     .inner
                     .lock()
-                    .map_err(|_| io::Error::new(io::ErrorKind::Other, "log mutex poisoned"))? =
-                    file;
+                    .map_err(|_| io::Error::other("log mutex poisoned"))? = file;
                 return self.write(buf);
             }
         }
@@ -82,7 +82,7 @@ impl Write for RollingFileWriter {
     fn flush(&mut self) -> io::Result<()> {
         self.inner
             .lock()
-            .map_err(|_| io::Error::new(io::ErrorKind::Other, "log mutex poisoned"))?
+            .map_err(|_| io::Error::other("log mutex poisoned"))?
             .flush()
     }
 }

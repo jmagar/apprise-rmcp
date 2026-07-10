@@ -53,7 +53,7 @@ fn config_defaults() {
     use apprise_mcp::config::{AppriseConfig, McpConfig};
 
     let mcp = McpConfig::default();
-    assert_eq!(mcp.port, 8765);
+    assert_eq!(mcp.port, 40050);
     assert_eq!(mcp.host, "0.0.0.0");
     assert_eq!(mcp.server_name, "apprise-mcp");
     assert!(mcp.api_token.is_none());
@@ -66,7 +66,7 @@ fn config_defaults() {
 fn config_bind_addr() {
     use apprise_mcp::config::McpConfig;
     let cfg = McpConfig::default();
-    assert_eq!(cfg.bind_addr(), "0.0.0.0:8765");
+    assert_eq!(cfg.bind_addr(), "0.0.0.0:40050");
 }
 
 #[test]
