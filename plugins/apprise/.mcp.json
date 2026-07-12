@@ -2,7 +2,7 @@
   "mcpServers": {
     "apprise": {
       "command": "npx",
-      "args": ["-y", "apprise-rmcp"]
+      "args": ["-y", "apprise-rmcp", "mcp"]
     }
   }
 }

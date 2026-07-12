@@ -5,7 +5,7 @@
   "author": {
     "name": "jmagar"
   },
-  "repository": "https://github.com/jmagar/apprise-mcp",
+  "repository": "https://github.com/jmagar/apprise-rmcp",
   "license": "MIT",
   "keywords": [
     "apprise",

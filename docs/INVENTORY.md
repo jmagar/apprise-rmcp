@@ -30,13 +30,13 @@ Guides the agent to send a critical failure-type notification with clear title a
 
 | Command | Description |
 |---------|-------------|
-| `apprise notify <body> [--tag T] [--title T] [--type ...]` | Send notification |
-| `apprise notify-url <urls> <body> [--title T] [--type ...]` | Stateless notify |
-| `apprise health [--json]` | Health check |
-| `apprise serve` | Start MCP HTTP server |
-| `apprise mcp` | Start MCP stdio transport |
-| `apprise --help` | Usage |
-| `apprise --version` | Version |
+| `rapprise notify <body> [--tag T] [--title T] [--type ...]` | Send notification |
+| `rapprise notify-url <urls> <body> [--title T] [--type ...]` | Stateless notify |
+| `rapprise health [--json]` | Health check |
+| `rapprise serve` | Start MCP HTTP server |
+| `rapprise mcp` | Start MCP stdio transport |
+| `rapprise --help` | Usage |
+| `rapprise --version` | Version |
 
 ## Environment variables
 

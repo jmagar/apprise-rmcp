@@ -214,20 +214,20 @@ async fn build_oauth_state(config: &Config) -> Result<lab_auth::state::AuthState
 fn print_usage() {
     eprintln!(
         "Usage:
-  apprise [serve]                    Start MCP HTTP server (default)
-  apprise mcp                        Start MCP stdio transport
-  apprise doctor                     Pre-flight environment validation
-  apprise setup check                Check plugin setup without mutating appdata
-  apprise setup repair               Create missing appdata/env setup files
-  apprise setup plugin-hook [--no-repair]  Plugin hook JSON contract
+  rapprise [serve]                   Start MCP HTTP server (default)
+  rapprise mcp                       Start MCP stdio transport
+  rapprise doctor                    Pre-flight environment validation
+  rapprise setup check               Check plugin setup without mutating appdata
+  rapprise setup repair              Create missing appdata/env setup files
+  rapprise setup plugin-hook [--no-repair] Plugin hook JSON contract
 
 Notification:
-  apprise notify <body> [--tag TAG] [--title T] [--type info|success|warning|failure]
-  apprise notify-url <urls> <body> [--title T] [--type ...]
+  rapprise notify <body> [--tag TAG] [--title T] [--type info|success|warning|failure]
+  rapprise notify-url <urls> <body> [--title T] [--type ...]
 
 Server:
-  apprise health [--json]            Check Apprise server health
-  apprise doctor [--json]            Validate environment before deployment
+  rapprise health [--json]           Check Apprise server health
+  rapprise doctor [--json]           Validate environment before deployment
 
 Options:
   --json                             Output raw JSON
