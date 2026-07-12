@@ -1,6 +1,6 @@
 {
   "name": "apprise-rmcp",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Node launcher for the Apprise Rust MCP server and rapprise CLI for multi-backend notifications.",
   "license": "MIT",
   "homepage": "https://github.com/jmagar/apprise-rmcp#readme",
@@ -49,5 +49,7 @@
     "oauth",
     "http-server",
     "stdio"
-  ]
+  ],
+  "mcpName": "ai.dinglebear/apprise-rmcp",
+  "binaryVersion": "0.1.2"
 }
