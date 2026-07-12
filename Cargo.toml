@@ -7,7 +7,11 @@ name = "apprise-mcp"
 version = "0.1.2"
 edition = "2021"
 rust-version = "1.86"
-description = "Apprise MCP server — universal push notification bridge"
+categories = ["command-line-utilities", "development-tools"]
+keywords = ["mcp", "apprise", "notifications", "rmcp", "homelab"]
+repository = "https://github.com/jmagar/apprise-rmcp"
+homepage = "https://github.com/jmagar/apprise-rmcp#readme"
+description = "Rust MCP server and CLI for Apprise notification fan-out across delivery backends with stdio/HTTP transports and auth."
 autobins = false
 
 [[bin]]

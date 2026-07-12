@@ -1,7 +1,7 @@
 {
   "name": "apprise-rmcp",
   "version": "0.1.2",
-  "description": "Node launcher for the apprise-rmcp Rust MCP server and rapprise CLI binary.",
+  "description": "Node launcher for the Apprise Rust MCP server and rapprise CLI for multi-backend notifications.",
   "license": "MIT",
   "homepage": "https://github.com/jmagar/apprise-rmcp#readme",
   "repository": {
@@ -32,7 +32,22 @@
   },
   "keywords": [
     "mcp",
+    "mcp-server",
+    "model-context-protocol",
+    "rmcp",
+    "rust",
     "apprise",
-    "notifications"
+    "notifications",
+    "push-notifications",
+    "webhooks",
+    "homelab",
+    "cli",
+    "claude-code",
+    "codex",
+    "gemini",
+    "automation",
+    "oauth",
+    "http-server",
+    "stdio"
   ]
 }
