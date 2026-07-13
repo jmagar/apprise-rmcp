@@ -116,6 +116,9 @@ build-plugin: release
     install -m 755 "$target_dir/release/rapprise" bin/rapprise
     install -m 755 "$target_dir/release/rapprise" plugins/apprise/bin/rapprise
 
+# Explicit binary artifact sync. This replaces hidden Cargo rustc-wrapper side effects.
+sync-bin: build-plugin
+
 # Publish: bump version, tag, push (triggers crates.io + Docker publish)
 publish bump="patch":
     #!/usr/bin/env bash
