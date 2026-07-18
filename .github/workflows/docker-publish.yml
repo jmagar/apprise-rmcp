@@ -24,7 +24,7 @@ jobs:
       ((github.event.workflow_run.name == 'CI' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main') ||
       github.event.workflow_run.name == 'Release')
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 90
     permissions:
       contents: read
       packages: write
