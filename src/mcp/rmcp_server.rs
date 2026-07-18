@@ -22,10 +22,6 @@ use super::{prompts, schemas::tool_definitions, tools::execute_tool, AppState, A
 
 const NOTIFY_SCOPE: &str = "apprise:notify";
 
-/// All actions require at least notify scope (or admin scope).
-/// Only `help` is freely accessible without auth.
-const AUTHED_ACTIONS: &[&str] = &["notify", "notify_url", "health"];
-
 #[derive(Clone)]
 pub struct AppriseRmcpServer {
     state: AppState,
@@ -57,6 +53,7 @@ impl ServerHandler for AppriseRmcpServer {
         request: CallToolRequestParams,
         context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, ErrorData> {
+        self.state.counters.inc_requests();
         let tool_name = request.name.to_string();
         let action: String = request
             .arguments
@@ -77,18 +74,19 @@ impl ServerHandler for AppriseRmcpServer {
             .unwrap_or_else(|| Value::Object(Map::new()));
 
         let started = Instant::now();
-        tracing::info!(tool = %tool_name, action = %action, "MCP tool execution started");
+        tracing::debug!(tool = %tool_name, action = %action, "MCP tool execution started");
 
         match execute_tool(&self.state, &tool_name, arguments).await {
             Ok(result) => {
-                tracing::info!(
+                tracing::debug!(
                     tool = %tool_name,
                     elapsed_ms = started.elapsed().as_millis(),
                     "MCP tool execution completed"
                 );
                 tool_result_from_json(result)
             }
-            Err(error) if is_validation_error(&error) => {
+            Err(error) if error.is_validation() => {
+                self.state.counters.inc_errors();
                 tracing::warn!(
                     tool = %tool_name,
                     elapsed_ms = started.elapsed().as_millis(),
@@ -97,6 +95,7 @@ impl ServerHandler for AppriseRmcpServer {
                 Err(ErrorData::invalid_params(error.to_string(), None))
             }
             Err(error) => {
+                self.state.counters.inc_errors();
                 tracing::error!(
                     tool = %tool_name,
                     elapsed_ms = started.elapsed().as_millis(),
@@ -309,16 +308,9 @@ fn check_scope(auth: &AuthContext, required_scope: &str, action: &str) -> Result
 fn required_scope_for(action: &str) -> Option<&'static str> {
     if action == "help" {
         None
-    } else if AUTHED_ACTIONS.contains(&action) {
-        Some(NOTIFY_SCOPE)
     } else {
-        None
+        Some(NOTIFY_SCOPE)
     }
-}
-
-fn is_validation_error(error: &anyhow::Error) -> bool {
-    let msg = error.to_string();
-    msg.contains(" is required") || msg.contains("unknown apprise action")
 }
 
 // ── allowed hosts / origins ───────────────────────────────────────────────────

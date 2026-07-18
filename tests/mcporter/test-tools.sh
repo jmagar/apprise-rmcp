@@ -31,11 +31,16 @@ set -uo pipefail
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
-readonly PROJECT_DIR="$(cd -- "${SCRIPT_DIR}/../.." && pwd -P)"
-readonly SCRIPT_NAME="$(basename -- "${BASH_SOURCE[0]}")"
-readonly TS_START="$(date +%s%N)"
-readonly LOG_FILE="${TMPDIR:-/tmp}/${SCRIPT_NAME%.sh}.$(date +%Y%m%d-%H%M%S).log"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+readonly SCRIPT_DIR
+PROJECT_DIR="$(cd -- "${SCRIPT_DIR}/../.." && pwd -P)"
+readonly PROJECT_DIR
+SCRIPT_NAME="$(basename -- "${BASH_SOURCE[0]}")"
+readonly SCRIPT_NAME
+TS_START="$(date +%s%N)"
+readonly TS_START
+LOG_FILE="${TMPDIR:-/tmp}/${SCRIPT_NAME%.sh}.$(date +%Y%m%d-%H%M%S).log"
+readonly LOG_FILE
 readonly ENV_FILE="${HOME}/.claude-homelab/.env"
 
 # Colours (disabled when stdout is not a terminal)
@@ -105,6 +110,7 @@ log_info()  { printf "${C_CYAN}[INFO]${C_RESET}  %s\n" "$*" | tee -a "${LOG_FILE
 log_warn()  { printf "${C_YELLOW}[WARN]${C_RESET}  %s\n" "$*" | tee -a "${LOG_FILE}"; }
 log_error() { printf "${C_RED}[ERROR]${C_RESET} %s\n" "$*" | tee -a "${LOG_FILE}" >&2; }
 
+# shellcheck disable=SC2329 # invoked indirectly by the EXIT trap below
 cleanup() {
   local rc=$?
   [[ $rc -ne 0 ]] && log_warn "Script exited with rc=${rc}. Log: ${LOG_FILE}"

@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use axum::{
+    extract::State,
     http::{HeaderValue, Method, StatusCode},
     response::{IntoResponse, Json},
     routing::get,
@@ -32,14 +33,17 @@ pub fn router(state: AppState) -> Router {
         AuthPolicy::LoopbackDev => None,
     };
 
-    let authenticated = if let Some(layer) = build_auth_layer(
+    let auth_layer = build_auth_layer(
         &state.auth_policy,
         state.config.api_token.as_deref().map(Arc::<str>::from),
         resource_url,
-    ) {
-        mcp_service.layer(layer)
-    } else {
-        mcp_service
+    );
+    let operational = Router::new()
+        .route("/ready", get(readiness))
+        .route("/status", get(status));
+    let (authenticated, protected_operational) = match auth_layer {
+        Some(layer) => (mcp_service.layer(layer.clone()), operational.layer(layer)),
+        None => (mcp_service, operational),
     };
 
     let oauth_router: Option<Router> = if let AuthPolicy::Mounted {
@@ -68,6 +72,7 @@ pub fn router(state: AppState) -> Router {
 
     let base: Router<()> = Router::new()
         .merge(authenticated)
+        .merge(protected_operational)
         .route("/health", get(health))
         .with_state(state.clone());
 
@@ -95,4 +100,25 @@ fn cors_layer(config: &crate::config::McpConfig) -> CorsLayer {
 
 async fn health() -> impl IntoResponse {
     Json(json!({ "status": "ok" }))
+}
+
+async fn readiness(State(state): State<AppState>) -> impl IntoResponse {
+    match tokio::time::timeout(std::time::Duration::from_secs(5), state.service.health()).await {
+        Ok(Ok(_)) => (StatusCode::OK, Json(json!({ "status": "ready" }))),
+        Ok(Err(error)) => {
+            tracing::warn!(%error, "readiness probe failed");
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({ "status": "not_ready", "reason": "upstream_unavailable" })),
+            )
+        }
+        Err(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({ "status": "not_ready", "reason": "upstream_timeout" })),
+        ),
+    }
+}
+
+async fn status(State(state): State<AppState>) -> impl IntoResponse {
+    Json(state.service.status())
 }

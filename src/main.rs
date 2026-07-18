@@ -1,14 +1,13 @@
 use anyhow::Result;
 use rmcp::{transport::stdio, ServiceExt};
-use std::sync::Arc;
 use tracing::info;
-use tracing_subscriber::{fmt, EnvFilter};
 
 use apprise_mcp::{
     app::AppriseService,
     apprise::AppriseClient,
-    config::{AuthMode, Config},
+    config::Config,
     mcp::{self, AppState, AuthPolicy},
+    runtime::build_state,
 };
 
 mod cli;
@@ -29,28 +28,20 @@ async fn main() -> Result<()> {
         _ => {}
     }
 
-    // Load ~/.apprise/.env (or /data/.env in a container) before any Config::load
-    // so the binary works on bare metal without a process manager injecting env.
-    // Non-overriding: explicit process env still wins.
-    apprise_mcp::config::load_dotenv();
-
     let stdio_mode = matches!(args.as_slice(), [c] if c == "mcp");
     let serve_mode = args.is_empty()
         || matches!(args.as_slice(), [c] if c == "serve")
         || matches!(args.as_slice(), [a, b] if a == "serve" && b == "mcp");
 
-    let log_level = if stdio_mode || !serve_mode {
-        "warn"
+    let _log_guard = if serve_mode {
+        Some(apprise_mcp::logging::init(
+            &apprise_mcp::config::default_data_dir(),
+            "info",
+        )?)
     } else {
-        "info"
+        apprise_mcp::logging::init_console("warn");
+        None
     };
-    fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_level)),
-        )
-        .with_writer(std::io::stderr)
-        .with_target(true)
-        .init();
 
     if serve_mode {
         serve_mcp().await
@@ -63,7 +54,8 @@ async fn main() -> Result<()> {
 
 async fn serve_mcp() -> Result<()> {
     let config = Config::load()?;
-    let state = build_state(config).await?;
+    let prepared = build_state(config).await?;
+    let state = prepared.state;
 
     info!(
         bind = %state.config.bind_addr(),
@@ -72,9 +64,10 @@ async fn serve_mcp() -> Result<()> {
         "apprise-mcp starting"
     );
 
-    let bind = state.config.bind_addr();
+    let bind_addrs = prepared.bind_addrs;
     let app = mcp::router(state).layer(tower_http::trace::TraceLayer::new_for_http());
-    let listener = tokio::net::TcpListener::bind(&bind).await?;
+    let listener = tokio::net::TcpListener::bind(bind_addrs.as_slice()).await?;
+    let bind = listener.local_addr()?;
     info!(bind = %bind, "MCP HTTP server listening");
 
     axum::serve(listener, app.into_make_service())
@@ -89,14 +82,17 @@ async fn serve_stdio_mcp() -> Result<()> {
     let service = AppriseService::new(
         AppriseClient::new(&config.apprise)?,
         config.apprise.url.clone(),
-    );
+    )
+    .with_config(config.mcp.clone());
+    let counters = service.counters.clone();
+    let clock = service.clock.clone();
     #[allow(clippy::useless_conversion)]
     let state = AppState {
         config: config.mcp,
         auth_policy: AuthPolicy::LoopbackDev,
         service,
-        counters: Arc::new(apprise_mcp::observability::Counters::default()),
-        clock: Arc::new(apprise_mcp::observability::ServerClock::new()),
+        counters,
+        clock,
     };
     let _ = (); // appease compiler
     let svc = mcp::rmcp_server(state).serve(stdio()).await?;
@@ -110,7 +106,7 @@ async fn run_cli(args: Vec<String>) -> Result<()> {
 
     // doctor/setup run before service construction.
     if matches!(filtered.as_slice(), [c] if c == "doctor") {
-        let config = Config::load().unwrap_or_default();
+        let config = Config::load()?;
         return cli::run_doctor(&config, json).await;
     }
 
@@ -120,8 +116,7 @@ async fn run_cli(args: Vec<String>) -> Result<()> {
         // Config::load() so the plugin hook can call the binary directly (no
         // plugin-setup.sh wrapper). apprise is template-style: the setup check
         // validates the pre-loaded &Config, so this must precede the load.
-        cli::apply_plugin_options();
-        let config = Config::load()?;
+        let config = Config::load_with_overrides(cli::plugin_overrides())?;
         return cli::run_setup(&config, command).await;
     }
 
@@ -131,84 +126,6 @@ async fn run_cli(args: Vec<String>) -> Result<()> {
         config.apprise.url.clone(),
     );
     cli::run(&service, parsed, json).await
-}
-
-async fn build_state(config: Config) -> Result<AppState> {
-    let service = AppriseService::new(
-        AppriseClient::new(&config.apprise)?,
-        config.apprise.url.clone(),
-    );
-
-    let auth_policy = if config.mcp.no_auth || config.mcp.host.starts_with("127.") {
-        AuthPolicy::LoopbackDev
-    } else if config.mcp.auth.mode == AuthMode::OAuth {
-        // Build full OAuth auth state (Google flow + JWKS)
-        let auth_state = build_oauth_state(&config).await?;
-        AuthPolicy::Mounted {
-            auth_state: Some(Arc::new(auth_state)),
-        }
-    } else {
-        // Bearer-token only (static token in APPRISE_MCP_TOKEN)
-        AuthPolicy::Mounted { auth_state: None }
-    };
-
-    let svc_counters = service.counters.clone();
-    let svc_clock = service.clock.clone();
-    Ok(AppState {
-        config: config.mcp,
-        auth_policy,
-        service,
-        counters: svc_counters,
-        clock: svc_clock,
-    })
-}
-
-async fn build_oauth_state(config: &Config) -> Result<lab_auth::state::AuthState> {
-    let vars: Vec<(String, String)> = {
-        let auth = &config.mcp.auth;
-        let mut v = vec![("APPRISE_MCP_AUTH_MODE".into(), "oauth".into())];
-        if let Some(url) = &auth.public_url {
-            v.push(("APPRISE_MCP_PUBLIC_URL".into(), url.clone()));
-        }
-        if let Some(id) = &auth.google_client_id {
-            v.push(("APPRISE_MCP_GOOGLE_CLIENT_ID".into(), id.clone()));
-        }
-        if let Some(secret) = &auth.google_client_secret {
-            v.push(("APPRISE_MCP_GOOGLE_CLIENT_SECRET".into(), secret.clone()));
-        }
-        if !auth.admin_email.is_empty() {
-            v.push((
-                "APPRISE_MCP_AUTH_ADMIN_EMAIL".into(),
-                auth.admin_email.clone(),
-            ));
-        }
-        if !auth.allowed_client_redirect_uris.is_empty() {
-            v.push((
-                "APPRISE_MCP_AUTH_ALLOWED_REDIRECT_URIS".into(),
-                auth.allowed_client_redirect_uris.join(","),
-            ));
-        }
-        v.push((
-            "APPRISE_MCP_AUTH_SQLITE_PATH".into(),
-            auth.sqlite_path.clone(),
-        ));
-        v.push(("APPRISE_MCP_AUTH_KEY_PATH".into(), auth.key_path.clone()));
-        v
-    };
-
-    let auth_config = lab_auth::config::AuthConfigBuilder::new()
-        .env_prefix("APPRISE_MCP")
-        .session_cookie_name("apprise_mcp_session")
-        .scopes_supported(vec!["apprise:notify".into(), "apprise:admin".into()])
-        .default_scope("apprise:notify")
-        .resource_path("/mcp")
-        .enable_dynamic_registration(true)
-        .build_from_sources(vars)
-        .map_err(|e| anyhow::anyhow!("failed to build auth config: {e}"))?;
-
-    lab_auth::state::AuthState::new(auth_config)
-        .await
-        .map_err(|e| anyhow::anyhow!("failed to init auth state: {e}"))
 }
 
 fn print_usage() {

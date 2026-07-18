@@ -3,7 +3,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
-const { spawnSync } = require("node:child_process");
+const { spawn, spawnSync } = require("node:child_process");
 const { binaryPath } = require("../lib/platform");
 
 function fail(message) {
@@ -12,23 +12,30 @@ function fail(message) {
 }
 
 const binary = binaryPath();
-
 if (!fs.existsSync(binary)) {
   const installer = path.resolve(__dirname, "..", "scripts", "install.js");
   const install = spawnSync(process.execPath, [installer], { stdio: "inherit" });
-  if (install.status !== 0) {
-    fail("binary is not installed; postinstall may have failed");
+  if (install.status !== 0) fail("binary is not installed; postinstall may have failed");
+}
+
+const child = spawn(binary, process.argv.slice(2), { stdio: "inherit" });
+const forwarded = ["SIGINT", "SIGTERM", "SIGHUP"];
+const signalHandlers = new Map();
+for (const signal of forwarded) {
+  const handler = () => {
+    if (!child.killed) child.kill(signal);
+  };
+  signalHandlers.set(signal, handler);
+  process.on(signal, handler);
+}
+child.on("error", (error) => fail(error.message));
+child.on("exit", (code, signal) => {
+  for (const [forwardedSignal, handler] of signalHandlers) {
+    process.removeListener(forwardedSignal, handler);
   }
-}
-
-const child = spawnSync(binary, process.argv.slice(2), { stdio: "inherit" });
-
-if (child.error) {
-  fail(child.error.message);
-}
-
-if (child.signal) {
-  process.kill(process.pid, child.signal);
-} else {
-  process.exit(child.status ?? 1);
-}
+  if (signal) {
+    process.kill(process.pid, signal);
+    return;
+  }
+  process.exit(code ?? 1);
+});

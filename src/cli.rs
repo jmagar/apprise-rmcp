@@ -11,6 +11,7 @@ use apprise_mcp::{
 
 // ── command enum ──────────────────────────────────────────────────────────────
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum CliCommand {
     Setup(SetupCommand),
     Notify {
@@ -53,30 +54,30 @@ impl CliCommand {
             ["setup", "check"] => Ok(Self::Setup(SetupCommand::Check)),
             ["setup", "repair"] => Ok(Self::Setup(SetupCommand::Repair)),
             ["setup", "install"] => Ok(Self::Setup(SetupCommand::Install)),
-            ["setup", "plugin-hook", flags @ ..] => Ok(Self::Setup(SetupCommand::PluginHook {
-                no_repair: flags.contains(&"--no-repair"),
-            })),
+            ["setup", "plugin-hook"] => {
+                Ok(Self::Setup(SetupCommand::PluginHook { no_repair: false }))
+            }
+            ["setup", "plugin-hook", "--no-repair"] => {
+                Ok(Self::Setup(SetupCommand::PluginHook { no_repair: true }))
+            }
 
             ["notify", body, rest @ ..] => {
-                let tag = flag_str(rest, "--tag")?;
-                let title = flag_str(rest, "--title")?;
-                let notify_type = parse_type_flag(rest)?;
+                let options = parse_notification_flags(rest, true)?;
                 Ok(Self::Notify {
                     body: body.to_string(),
-                    tag,
-                    title,
-                    notify_type,
+                    tag: options.tag,
+                    title: options.title,
+                    notify_type: options.notify_type,
                 })
             }
 
             ["notify-url", urls, body, rest @ ..] => {
-                let title = flag_str(rest, "--title")?;
-                let notify_type = parse_type_flag(rest)?;
+                let options = parse_notification_flags(rest, false)?;
                 Ok(Self::NotifyUrl {
                     urls: urls.to_string(),
                     body: body.to_string(),
-                    title,
-                    notify_type,
+                    title: options.title,
+                    notify_type: options.notify_type,
                 })
             }
 
@@ -213,7 +214,7 @@ impl SetupReport {
 /// No `CLAUDE_PLUGIN_DATA` → `APPRISE_HOME` mapping is needed: `setup_data_dir()`
 /// resolves the canonical `~/.apprise/` appdata dir (honoring an explicit
 /// `APPRISE_HOME` override) — the same place the binary loads `.env` from.
-pub fn apply_plugin_options() {
+pub fn plugin_overrides() -> Vec<(String, String)> {
     // CLAUDE_PLUGIN_OPTION_<OPT> -> <APPRISE_ENVVAR>
     let map = [
         ("CLAUDE_PLUGIN_OPTION_API_TOKEN", "APPRISE_MCP_TOKEN"),
@@ -236,16 +237,18 @@ pub fn apply_plugin_options() {
             "APPRISE_MCP_AUTH_ADMIN_EMAIL",
         ),
     ];
-    for (opt, dest) in map {
-        if let Some(v) = std::env::var_os(opt) {
-            let s = v.to_string_lossy();
-            if s.is_empty() || s.contains('\n') || s.contains('\r') {
-                continue;
+    map.into_iter()
+        .filter_map(|(opt, dest)| {
+            if let Some(v) = std::env::var_os(opt) {
+                let s = v.to_string_lossy();
+                if s.is_empty() || s.contains('\n') || s.contains('\r') {
+                    return None;
+                }
+                return Some((dest.to_string(), s.into_owned()));
             }
-            // edition 2021: set_var is safe (no unsafe block required).
-            std::env::set_var(dest, v);
-        }
-    }
+            None
+        })
+        .collect()
 }
 
 pub async fn run_setup(config: &Config, command: SetupCommand) -> Result<()> {
@@ -262,7 +265,7 @@ pub async fn run_setup(config: &Config, command: SetupCommand) -> Result<()> {
 
     println!("{}", serde_json::to_string_pretty(&report)?);
     if !report.blocking_failures.is_empty() {
-        std::process::exit(1);
+        bail!("setup failed with one or more blocking failures");
     }
     Ok(())
 }
@@ -352,6 +355,11 @@ fn setup_check(config: &Config, no_repair: bool) -> SetupReport {
 fn setup_repair(config: &Config) -> Result<SetupReport> {
     let data_dir = setup_data_dir();
     std::fs::create_dir_all(&data_dir)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&data_dir, std::fs::Permissions::from_mode(0o700))?;
+    }
     write_setup_env(&data_dir, config)?;
 
     let mut report = setup_check(config, false);
@@ -441,9 +449,7 @@ fn setup_data_dir() -> PathBuf {
     // binary loads `.env` from (`config::load_dotenv`), so the plugin hook's writes
     // and the server's reads always agree. An explicit `APPRISE_HOME` override is
     // honored; `CLAUDE_PLUGIN_DATA` is intentionally NOT consulted.
-    std::env::var_os("APPRISE_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(apprise_mcp::config::default_data_dir)
+    apprise_mcp::config::default_data_dir()
 }
 
 fn write_setup_env(data_dir: &Path, config: &Config) -> Result<()> {
@@ -484,7 +490,47 @@ fn write_setup_env(data_dir: &Path, config: &Config) -> Result<()> {
         }
     }
 
-    std::fs::write(data_dir.join(".env"), format!("{}\n", lines.join("\n")))?;
+    for line in &lines {
+        if line.contains(['\n', '\r']) {
+            bail!("refusing to write a multiline value to the setup environment file");
+        }
+    }
+
+    let env_path = data_dir.join(".env");
+    if std::fs::symlink_metadata(&env_path).is_ok_and(|metadata| metadata.file_type().is_symlink())
+    {
+        bail!(
+            "refusing to overwrite symlinked environment file: {}",
+            env_path.display()
+        );
+    }
+    replace_file_atomically(
+        data_dir,
+        &env_path,
+        format!("{}\n", lines.join("\n")).as_bytes(),
+    )?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&env_path, std::fs::Permissions::from_mode(0o600))?;
+    }
+    Ok(())
+}
+
+fn replace_file_atomically(directory: &Path, destination: &Path, contents: &[u8]) -> Result<()> {
+    use std::io::Write;
+
+    let mut temporary = tempfile::Builder::new()
+        .prefix(".env.tmp.")
+        .tempfile_in(directory)?;
+    temporary.write_all(contents)?;
+    temporary.as_file().sync_all()?;
+    temporary
+        .persist(destination)
+        .map_err(|error| error.error)?;
+
+    #[cfg(unix)]
+    std::fs::File::open(directory)?.sync_all()?;
     Ok(())
 }
 
@@ -520,21 +566,82 @@ Note: apprise-mcp connects to the Apprise API Server (not the Python library dir
 
 // ── flag helpers ──────────────────────────────────────────────────────────────
 
-fn flag_str(args: &[&str], flag: &str) -> Result<Option<String>> {
-    for window in args.windows(2) {
-        if window[0] == flag {
-            return Ok(Some(window[1].to_string()));
-        }
-    }
-    Ok(None)
+struct NotificationFlags {
+    tag: Option<String>,
+    title: Option<String>,
+    notify_type: NotifyType,
 }
 
-fn parse_type_flag(args: &[&str]) -> Result<NotifyType> {
-    match flag_str(args, "--type")? {
-        None => Ok(NotifyType::default()),
-        Some(s) => NotifyType::from_str_opt(&s).ok_or_else(|| {
-            anyhow::anyhow!("--type must be info|success|warning|failure, got {s:?}")
-        }),
+fn parse_notification_flags(args: &[&str], allow_tag: bool) -> Result<NotificationFlags> {
+    let mut tag = None;
+    let mut title = None;
+    let mut notify_type = None;
+    let mut index = 0;
+    while index < args.len() {
+        let flag = args[index];
+        if !matches!(flag, "--tag" | "--title" | "--type") {
+            bail!("unknown option {flag:?}");
+        }
+        if flag == "--tag" && !allow_tag {
+            bail!("--tag is not valid for notify-url");
+        }
+        let value = args
+            .get(index + 1)
+            .filter(|value| !value.starts_with("--"))
+            .ok_or_else(|| anyhow::anyhow!("{flag} requires a value"))?;
+        match flag {
+            "--tag" if tag.is_none() => tag = Some((*value).to_string()),
+            "--title" if title.is_none() => title = Some((*value).to_string()),
+            "--type" if notify_type.is_none() => {
+                notify_type = Some(NotifyType::from_str_opt(value).ok_or_else(|| {
+                    anyhow::anyhow!("--type must be info|success|warning|failure, got {value:?}")
+                })?);
+            }
+            _ => bail!("duplicate option {flag}"),
+        }
+        index += 2;
+    }
+    Ok(NotificationFlags {
+        tag,
+        title,
+        notify_type: notify_type.unwrap_or_default(),
+    })
+}
+
+#[cfg(test)]
+mod parse_tests {
+    use super::*;
+
+    fn strings(values: &[&str]) -> Vec<String> {
+        values.iter().map(|value| (*value).into()).collect()
+    }
+
+    #[test]
+    fn parses_complete_notify_command() {
+        let command = CliCommand::parse(&strings(&[
+            "notify", "hello", "--tag", "ops", "--title", "Alert", "--type", "warning",
+        ]))
+        .unwrap();
+        assert_eq!(
+            command,
+            CliCommand::Notify {
+                body: "hello".into(),
+                tag: Some("ops".into()),
+                title: Some("Alert".into()),
+                notify_type: NotifyType::Warning,
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_unknown_duplicate_and_dangling_flags() {
+        assert!(CliCommand::parse(&strings(&["notify", "hello", "--bogus", "x"])).is_err());
+        assert!(CliCommand::parse(&strings(&["notify", "hello", "--tag"])).is_err());
+        assert!(CliCommand::parse(&strings(&[
+            "notify", "hello", "--tag", "one", "--tag", "two",
+        ]))
+        .is_err());
+        assert!(CliCommand::parse(&strings(&["setup", "plugin-hook", "--surprise",])).is_err());
     }
 }
 
@@ -817,7 +924,7 @@ pub async fn run_doctor(config: &Config, json: bool) -> Result<()> {
     }
 
     if issues > 0 {
-        std::process::exit(1);
+        bail!("doctor found {issues} failing check(s)");
     }
     Ok(())
 }
@@ -891,4 +998,20 @@ fn dir_size_mb(path: &std::path::Path) -> Option<f64> {
         }
     }
     Some(total as f64 / (1024.0 * 1024.0))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn atomic_replace_overwrites_an_existing_destination() {
+        let directory = tempfile::tempdir().unwrap();
+        let destination = directory.path().join(".env");
+        std::fs::write(&destination, "old").unwrap();
+
+        replace_file_atomically(directory.path(), &destination, b"new").unwrap();
+
+        assert_eq!(std::fs::read(&destination).unwrap(), b"new");
+    }
 }

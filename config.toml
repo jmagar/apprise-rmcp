@@ -1,4 +1,4 @@
-# apprise-mcp configuration
+# apprise-rmcp / rapprise configuration
 # All values here are non-secret. Secrets and URLs belong in .env.
 # Environment variables override these values at runtime.
 
@@ -20,3 +20,14 @@ allowed_origins = []
 
 # Additional allowed Host header values for the MCP server
 allowed_hosts = []
+
+[mcp.auth]
+mode = "bearer"
+disable_static_token_with_oauth = true
+allowed_emails = []
+allowed_client_redirect_uris = []
+access_token_ttl_secs = 3600
+refresh_token_ttl_secs = 2592000
+auth_code_ttl_secs = 300
+register_rpm = 10
+authorize_rpm = 60

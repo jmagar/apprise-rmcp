@@ -1,86 +1,185 @@
 name: Docker Publish
 
 on:
-  push:
-    branches: [main]
-    tags: ["v*"]
+  workflow_run:
+    workflows: [CI, Release]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-publish-${{ github.event.workflow_run.name }}-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: jmagar/apprise-rmcp
+  IMAGE_NAME: jmagar/apprise-mcp
 
 jobs:
-  build-and-push:
-    name: Build and push Docker image
+  build-scan-push:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      ((github.event.workflow_run.name == 'CI' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main') ||
+      github.event.workflow_run.name == 'Release')
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     permissions:
       contents: read
       packages: write
       id-token: write
+      attestations: write
       security-events: write
-
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require published commit on main
+        run: |
+          git fetch origin main
+          git merge-base --is-ancestor HEAD origin/main
+      - uses: docker/setup-qemu-action@68827325e0b33c7199a2f1f42f6c1b492d7a4f5c # v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - id: release
+        name: Resolve immutable and channel tags
+        env:
+          SOURCE_WORKFLOW: ${{ github.event.workflow_run.name }}
+        run: |
+          set -euo pipefail
+          sha="$(git rev-parse HEAD)"
+          short="${sha:0:12}"
+          image="${REGISTRY}/${IMAGE_NAME}"
+          tags="${image}:sha-${short}"
+          if [[ "$SOURCE_WORKFLOW" == Release ]]; then
+            release_tag="$(git tag --points-at HEAD | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$' | head -1)"
+            [[ -n "$release_tag" ]] || { echo "::error::successful Release run is not attached to a release tag"; exit 1; }
+            version="${release_tag#v}"
+            [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]] || exit 1
+            tags+=$'\n'"${image}:${version}"
+          else
+            tags+=$'\n'"${image}:latest"
+          fi
+          {
+            echo 'tags<<EOF'
+            echo "$tags"
+            echo EOF
+            echo "canonical=${image}:sha-${short}"
+          } >> "$GITHUB_OUTPUT"
+      - name: Build exact local AMD64 image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: config/Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: ${{ steps.release.outputs.canonical }}-amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Blocking AMD64 vulnerability scan before registry login or push
+        uses: aquasecurity/trivy-action@c07df6fec6fa692e6fd1200d50aaa1fdd66f03c8 # master reviewed 2026-07-18
+        with:
+          image-ref: ${{ steps.release.outputs.canonical }}-amd64
+          format: sarif
+          output: trivy-amd64.sarif
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+      - name: Upload AMD64 scan result
+        if: always()
+        uses: github/codeql-action/upload-sarif@ddf5ce7296213f5548c91e2dd19df2d77d2b2d66 # v3
+        with:
+          sarif_file: trivy-amd64.sarif
+          category: trivy-amd64
+      - name: Generate AMD64 SBOM from scanned local image
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
+        with:
+          image: ${{ steps.release.outputs.canonical }}-amd64
+          format: spdx-json
+          output-file: sbom-amd64.spdx.json
+          upload-release-assets: false
+      - name: Build exact local ARM64 image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: config/Dockerfile
+          platforms: linux/arm64
+          load: true
+          push: false
+          tags: ${{ steps.release.outputs.canonical }}-arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Blocking ARM64 vulnerability scan before registry login or push
+        uses: aquasecurity/trivy-action@c07df6fec6fa692e6fd1200d50aaa1fdd66f03c8 # master reviewed 2026-07-18
+        with:
+          image-ref: ${{ steps.release.outputs.canonical }}-arm64
+          format: sarif
+          output: trivy-arm64.sarif
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+      - name: Upload ARM64 scan result
+        if: always()
+        uses: github/codeql-action/upload-sarif@ddf5ce7296213f5548c91e2dd19df2d77d2b2d66 # v3
+        with:
+          sarif_file: trivy-arm64.sarif
+          category: trivy-arm64
+      - name: Generate ARM64 SBOM from scanned local image
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
+        with:
+          image: ${{ steps.release.outputs.canonical }}-arm64
+          format: spdx-json
+          output-file: sbom-arm64.spdx.json
+          upload-release-assets: false
+      - name: Log in only after all pre-publication gates pass
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract Docker metadata
-        id: meta
-        uses: docker/metadata-action@v5
+      - name: Push scanned platform images and assemble the manifest
+        env:
+          TAGS: ${{ steps.release.outputs.tags }}
+        run: |
+          set -euo pipefail
+          amd64="${{ steps.release.outputs.canonical }}-amd64"
+          arm64="${{ steps.release.outputs.canonical }}-arm64"
+          docker push "$amd64"
+          docker push "$arm64"
+          amd64_digest="$(docker buildx imagetools inspect "$amd64" --format '{{.Manifest.Digest}}')"
+          arm64_digest="$(docker buildx imagetools inspect "$arm64" --format '{{.Manifest.Digest}}')"
+          while IFS= read -r tag; do
+            docker buildx imagetools create --tag "$tag" "${amd64%@*}@${amd64_digest}" "${arm64%@*}@${arm64_digest}"
+          done <<< "$TAGS"
+          digest="$(docker buildx imagetools inspect "${{ steps.release.outputs.canonical }}" --format '{{.Manifest.Digest}}')"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          {
+            echo "digest=$digest"
+            echo "amd64_digest=$amd64_digest"
+            echo "arm64_digest=$arm64_digest"
+          } >> "$GITHUB_OUTPUT"
+        id: pushed
+      - name: Attest AMD64 SBOM to the pushed platform digest
+        uses: actions/attest-sbom@10926c72720ffc3f7b666661c8e55b1344e2a365 # v2
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=ref,event=branch
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Build and push
-        id: push
-        uses: docker/build-push-action@v6
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.pushed.outputs.amd64_digest }}
+          sbom-path: sbom-amd64.spdx.json
+          push-to-registry: true
+      - name: Attest ARM64 SBOM to the pushed platform digest
+        uses: actions/attest-sbom@10926c72720ffc3f7b666661c8e55b1344e2a365 # v2
         with:
-          context: .
-          file: config/Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Run Trivy vulnerability scan
-        uses: aquasecurity/trivy-action@master
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.pushed.outputs.arm64_digest }}
+          sbom-path: sbom-arm64.spdx.json
+          push-to-registry: true
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-          format: sarif
-          output: trivy-results.sarif
-          ignore-unfixed: true
-          severity: CRITICAL,HIGH
-
-      - name: Upload Trivy results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
-        with:
-          sarif_file: trivy-results.sarif
-
-      - name: Generate SBOM
-        uses: anchore/sbom-action@v0
-        with:
-          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.push.outputs.digest }}
-          format: spdx-json
-          output-file: sbom.spdx.json
-          upload-release-assets: false
-
-      - name: Upload SBOM artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: sbom
-          path: sbom.spdx.json
+          name: image-sbom-${{ github.run_id }}
+          path: |
+            sbom-amd64.spdx.json
+            sbom-arm64.spdx.json
+          retention-days: 90

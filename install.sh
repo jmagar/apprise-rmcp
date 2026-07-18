@@ -1,77 +1,47 @@
 #!/usr/bin/env bash
-# install.sh — one-line install for apprise-rmcp binary
-# Usage: curl -fsSL https://raw.githubusercontent.com/jmagar/apprise-rmcp/main/install.sh | bash
+# Bootstrap the canonical installer from an immutable release tag with bounded
+# timeout/redirect handling, SHA256 validation, and provenance verification.
 set -euo pipefail
 
-INSTALL_DIR="${HOME}/.local/bin"
-BINARY_NAME="rapprise"
-
-# ── Detect platform ───────────────────────────────────────────────────────────
-OS="$(uname -s)"
-ARCH="$(uname -m)"
-
-case "${OS}-${ARCH}" in
-  Linux-x86_64)  ASSET="apprise-x86_64-linux" ;;
-  Linux-aarch64) ASSET="apprise-aarch64-linux" ;;
-  Darwin-x86_64) ASSET="apprise-x86_64-macos" ;;
-  Darwin-arm64)  ASSET="apprise-aarch64-macos" ;;
-  *)
-    echo "ERROR: unsupported platform ${OS}-${ARCH}" >&2
-    echo "       Build from source: cargo install --path ." >&2
-    exit 1
-    ;;
-esac
-
-REPO="jmagar/apprise-rmcp"
-DOWNLOAD_URL="https://github.com/${REPO}/releases/latest/download/${ASSET}"
-
-# ── Install binary ────────────────────────────────────────────────────────────
-mkdir -p "${INSTALL_DIR}"
-
-echo "Downloading apprise-rmcp from ${DOWNLOAD_URL} ..."
-curl -fsSL --progress-bar "${DOWNLOAD_URL}" -o "${INSTALL_DIR}/${BINARY_NAME}"
-chmod +x "${INSTALL_DIR}/${BINARY_NAME}"
-
-echo "Installed: ${INSTALL_DIR}/${BINARY_NAME}"
-
-# Verify
-if "${INSTALL_DIR}/${BINARY_NAME}" --version >/dev/null 2>&1; then
-  echo "Version: $("${INSTALL_DIR}/${BINARY_NAME}" --version)"
+if [[ -x "$(dirname "${BASH_SOURCE[0]}")/scripts/install.sh" ]]; then
+  exec "$(dirname "${BASH_SOURCE[0]}")/scripts/install.sh" "$@"
 fi
 
-# ── Starter .env ──────────────────────────────────────────────────────────────
-if [[ ! -f ".env" ]]; then
-  if [[ -f ".env.example" ]]; then
-    cp .env.example .env
-    echo "Created .env from .env.example — edit it to set APPRISE_URL and APPRISE_MCP_TOKEN"
-  else
-    cat > .env << 'EOF'
-# Upstream Apprise API server URL (required)
-APPRISE_URL=http://localhost:8000
-
-# Static bearer token for the MCP HTTP server (generate: openssl rand -hex 32)
-APPRISE_MCP_TOKEN=
-
-# Optional Apprise API token
-APPRISE_TOKEN=
-
-RUST_LOG=info
-EOF
-    echo "Created starter .env — edit it to set APPRISE_URL and APPRISE_MCP_TOKEN"
-  fi
+version="${APPRISE_RMCP_VERSION:-}"
+repo="${APPRISE_RMCP_REPO:-jmagar/apprise-rmcp}"
+if [[ ! "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+  echo "error: APPRISE_RMCP_VERSION must be an explicit release tag such as v0.1.3" >&2
+  exit 1
 fi
-
-# ── PATH hint ─────────────────────────────────────────────────────────────────
-if ! command -v "${BINARY_NAME}" >/dev/null 2>&1; then
-  echo ""
-  echo "NOTE: ${INSTALL_DIR} is not in your PATH."
-  echo "      Add this to your shell profile:"
-  echo "        export PATH=\"\${HOME}/.local/bin:\${PATH}\""
+command -v gh >/dev/null 2>&1 || { echo "error: GitHub CLI 2.68+ is required for provenance verification" >&2; exit 1; }
+gh_version="$(gh --version | head -1)"
+if [[ ! "$gh_version" =~ gh\ version\ ([0-9]+)\.([0-9]+)\. ]]; then
+  echo "error: unable to determine GitHub CLI version" >&2
+  exit 1
 fi
-
-echo ""
-echo "Next steps:"
-echo "  1. Edit .env — set APPRISE_URL (your Apprise server) and APPRISE_MCP_TOKEN (shared secret)"
-echo "  2. Edit config.toml for non-secret settings (host, port, auth_mode)"
-echo "  3. Run: apprise serve mcp"
-echo "     Or:  docker compose up -d"
+if (( BASH_REMATCH[1] < 2 || (BASH_REMATCH[1] == 2 && BASH_REMATCH[2] < 68) )); then
+  echo "error: GitHub CLI 2.68+ is required for provenance verification" >&2
+  exit 1
+fi
+temporary_dir="$(mktemp -d)"
+trap 'rm -rf "$temporary_dir"' EXIT
+base="https://github.com/${repo}/releases/download/${version}/rapprise-installer.sh"
+curl_args=(--fail --silent --show-error --location --connect-timeout 10 --max-time 30 --max-redirs 3 \
+  --proto '=https' --proto-redir '=https')
+curl "${curl_args[@]}" "$base" -o "$temporary_dir/rapprise-installer.sh"
+curl "${curl_args[@]}" "$base.sha256" -o "$temporary_dir/rapprise-installer.sh.sha256"
+curl "${curl_args[@]}" "$base.sigstore.json" -o "$temporary_dir/rapprise-installer.sh.sigstore.json"
+expected="$(awk 'NR == 1 {print $1}' "$temporary_dir/rapprise-installer.sh.sha256")"
+actual="$(sha256sum "$temporary_dir/rapprise-installer.sh" | awk '{print $1}')"
+[[ "$expected" =~ ^[0-9a-fA-F]{64}$ && "${actual,,}" == "${expected,,}" ]] || {
+  echo "error: installer checksum verification failed" >&2
+  exit 1
+}
+gh attestation verify "$temporary_dir/rapprise-installer.sh" --repo "$repo" \
+  --bundle "$temporary_dir/rapprise-installer.sh.sigstore.json" \
+  --signer-workflow "$repo/.github/workflows/release.yml" \
+  --source-ref "refs/tags/$version" --deny-self-hosted-runners >/dev/null || {
+  echo "error: installer provenance verification failed" >&2
+  exit 1
+}
+exec bash "$temporary_dir/rapprise-installer.sh" "$@"

@@ -1,5 +1,8 @@
 [advisories]
 ignore = [
-  # Inherited through lab-auth/jsonwebtoken. No fixed rsa release is available.
+  # TEMPORARY EXCEPTION, expires 2026-08-18. Inherited through
+  # lab-auth/jsonwebtoken; no fixed rsa release is available. OAuth endpoints
+  # are authenticated/rate-limited by lab-auth. Remove this exception as soon
+  # as that dependency migrates to a constant-time signing implementation.
   "RUSTSEC-2023-0071",
 ]

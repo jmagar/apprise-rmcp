@@ -66,6 +66,65 @@ fn setup_repair_creates_env_file_without_upstream_contact() {
     let env_file = std::fs::read_to_string(missing.join(".env")).unwrap();
     assert!(env_file.contains("APPRISE_URL=http://apprise.example:8000"));
     assert!(env_file.contains("APPRISE_MCP_TOKEN=mcp-secret"));
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(
+            std::fs::metadata(&missing).unwrap().permissions().mode() & 0o777,
+            0o700
+        );
+        assert_eq!(
+            std::fs::metadata(missing.join(".env"))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777,
+            0o600
+        );
+    }
+}
+
+#[test]
+fn setup_repair_replaces_existing_env_repeatedly() {
+    let dir = tempdir().unwrap();
+    let appdata = dir.path().join("appdata");
+    std::fs::create_dir(&appdata).unwrap();
+    std::fs::write(appdata.join(".env"), "APPRISE_URL=http://old.example\n").unwrap();
+    for _ in 0..2 {
+        let output = base_command(&appdata)
+            .args(["setup", "repair"])
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    let env_file = std::fs::read_to_string(appdata.join(".env")).unwrap();
+    assert!(env_file.contains("APPRISE_URL=http://apprise.example:8000"));
+}
+
+#[cfg(unix)]
+#[test]
+fn setup_repair_refuses_symlinked_env_file() {
+    use std::os::unix::fs::symlink;
+
+    let dir = tempdir().unwrap();
+    let appdata = dir.path().join("appdata");
+    std::fs::create_dir(&appdata).unwrap();
+    let target = dir.path().join("target.env");
+    std::fs::write(&target, "KEEP=this\n").unwrap();
+    symlink(&target, appdata.join(".env")).unwrap();
+
+    let output = base_command(&appdata)
+        .args(["setup", "repair"])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("symlink"));
+    assert_eq!(std::fs::read_to_string(target).unwrap(), "KEEP=this\n");
 }
 
 /// The plugin hook config must call the binary directly (no plugin-setup.sh).

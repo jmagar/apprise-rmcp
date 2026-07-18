@@ -1,87 +1,43 @@
 #!/usr/bin/env bash
-# check-version-sync.sh — Pre-commit hook to verify all version-bearing files match.
-# Exits non-zero if versions are out of sync or CHANGELOG.md is missing an entry.
 set -euo pipefail
 
-PROJECT_DIR="${1:-.}"
-cd "$PROJECT_DIR"
+repo_root="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+expected="${EXPECTED_VERSION:-}"
+cd "${repo_root}"
 
-versions=()
-files_checked=()
+python3 - "${expected}" <<'PY'
+import json, re, sys
+from pathlib import Path
 
-# Extract version from each file type
-if [ -f "Cargo.toml" ]; then
-  v=$(grep -m1 '^version' Cargo.toml | sed 's/.*"\(.*\)".*/\1/')
-  [ -n "$v" ] && versions+=("Cargo.toml=$v") && files_checked+=("Cargo.toml")
-fi
+expected = sys.argv[1].removeprefix("v")
+values = {}
 
-if [ -f "package.json" ]; then
-  v=$(python3 -c "import json; print(json.load(open('package.json')).get('version',''))" 2>/dev/null)
-  [ -n "$v" ] && versions+=("package.json=$v") && files_checked+=("package.json")
-fi
+cargo = Path("Cargo.toml").read_text()
+match = re.search(r"(?ms)^\[package\].*?^version\s*=\s*\"([^\"]+)\"", cargo)
+if not match:
+    raise SystemExit("[version-sync] Cargo.toml package version is missing")
+values["Cargo.toml package.version"] = match.group(1)
 
-if [ -f "pyproject.toml" ]; then
-  v=$(grep -m1 '^version' pyproject.toml | sed 's/.*"\(.*\)".*/\1/')
-  [ -n "$v" ] && versions+=("pyproject.toml=$v") && files_checked+=("pyproject.toml")
-fi
+npm = json.loads(Path("packages/apprise-rmcp/package.json").read_text())
+values["packages/apprise-rmcp/package.json version"] = npm["version"]
+values["packages/apprise-rmcp/package.json binaryVersion"] = npm["binaryVersion"]
 
-if [ -f ".claude-plugin/plugin.json" ]; then
-  v=$(python3 -c "import json; print(json.load(open('.claude-plugin/plugin.json')).get('version',''))" 2>/dev/null)
-  [ -n "$v" ] && versions+=(".claude-plugin/plugin.json=$v") && files_checked+=(".claude-plugin/plugin.json")
-fi
+server = json.loads(Path("server.json").read_text())
+values["server.json version"] = server["version"]
+for index, package in enumerate(server.get("packages", [])):
+    if "version" in package:
+        values[f"server.json packages[{index}].version"] = package["version"]
+values["server.json buildInfo.version"] = server["_meta"]["io.modelcontextprotocol.registry/publisher-provided"]["buildInfo"]["version"]
 
-if [ -f ".codex-plugin/plugin.json" ]; then
-  v=$(python3 -c "import json; print(json.load(open('.codex-plugin/plugin.json')).get('version',''))" 2>/dev/null)
-  [ -n "$v" ] && versions+=(".codex-plugin/plugin.json=$v") && files_checked+=(".codex-plugin/plugin.json")
-fi
+manifest = json.loads(Path(".release-please-manifest.json").read_text())
+values[".release-please-manifest.json root"] = manifest["."]
 
-if [ -f "gemini-extension.json" ]; then
-  v=$(python3 -c "import json; print(json.load(open('gemini-extension.json')).get('version',''))" 2>/dev/null)
-  [ -n "$v" ] && versions+=("gemini-extension.json=$v") && files_checked+=("gemini-extension.json")
-fi
-
-# Need at least one version source
-if [ ${#versions[@]} -eq 0 ]; then
-  echo "[version-sync] No version-bearing files found — skipping"
-  exit 0
-fi
-
-# Check all versions match
-canonical=""
-mismatch=0
-for entry in "${versions[@]}"; do
-  file="${entry%%=*}"
-  ver="${entry##*=}"
-  if [ -z "$canonical" ]; then
-    canonical="$ver"
-  elif [ "$ver" != "$canonical" ]; then
-    mismatch=1
-  fi
-done
-
-if [ "$mismatch" -eq 1 ]; then
-  echo "[version-sync] FAIL — versions are out of sync:"
-  for entry in "${versions[@]}"; do
-    file="${entry%%=*}"
-    ver="${entry##*=}"
-    marker=" "
-    [ "$ver" != "$canonical" ] && marker="!"
-    echo "  $marker $file: $ver"
-  done
-  echo ""
-  echo "All version-bearing files must have the same version."
-  echo "Files checked: ${files_checked[*]}"
-  exit 1
-fi
-
-# Check CHANGELOG.md has an entry for the current version
-if [ -f "CHANGELOG.md" ]; then
-  if ! grep -qF "$canonical" CHANGELOG.md; then
-    echo "[version-sync] WARN — CHANGELOG.md has no entry for version $canonical"
-    echo "  Add a changelog entry before pushing."
-    # Warning only, not blocking
-  fi
-fi
-
-echo "[version-sync] OK — all ${#versions[@]} files at v${canonical}"
-exit 0
+canonical = expected or values["Cargo.toml package.version"]
+mismatches = {name: value for name, value in values.items() if value != canonical}
+if mismatches:
+    print(f"[version-sync] FAIL: expected every release artifact at {canonical}", file=sys.stderr)
+    for name, value in values.items():
+        print(f"  {'!' if name in mismatches else ' '} {name}: {value}", file=sys.stderr)
+    raise SystemExit(1)
+print(f"[version-sync] OK: {len(values)} release fields at v{canonical}")
+PY

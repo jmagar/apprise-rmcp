@@ -26,6 +26,12 @@ install: release
 docker-up:
     docker compose up -d
 
+rollout image:
+    bash scripts/rollout-container.sh deploy "{{image}}"
+
+rollback:
+    bash scripts/rollout-container.sh rollback
+
 docker-down:
     docker compose down
 
@@ -75,6 +81,9 @@ validate-plugin: validate-skills
 
 runtime-current:
     bash scripts/check-runtime-current.sh --unit apprise-mcp.service --service apprise-mcp --expected-binary target/release/rapprise
+
+runtime-current-image expected_image:
+    bash scripts/check-runtime-current.sh --mode docker --service apprise-mcp --expected-image "{{expected_image}}"
 
 # Generate a standalone CLI for this server (requires running server; HTTP-only transport)
 generate-cli:

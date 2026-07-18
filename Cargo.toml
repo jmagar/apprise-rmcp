@@ -4,9 +4,9 @@ resolver = "2"
 
 [package]
 name = "apprise-mcp"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
-rust-version = "1.86"
+rust-version = "1.90"
 categories = ["command-line-utilities", "development-tools"]
 keywords = ["mcp", "apprise", "notifications", "rmcp", "homelab"]
 repository = "https://github.com/jmagar/apprise-rmcp"
@@ -44,27 +44,31 @@ lab-auth = { git = "https://github.com/jmagar/lab.git", rev = "87cec3241f9baef22
 url = "2"
 
 # HTTP client
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
+futures-util = "0.3"
 
 # Platform directories
 dirs = "5"
 
 # Errors
 anyhow = "1"
+thiserror = "2"
 
 # Logging
 tracing = "0.1"
+tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "fmt"] }
 dotenvy = "0.15.7"
+tempfile = "3"
 
 [features]
 test-support = []
 
 [dev-dependencies]
 apprise-mcp = { path = ".", features = ["test-support"] }
-tempfile = "3"
 tokio = { version = "1", features = ["full"] }
 rmcp = { version = "1.6.0", default-features = false, features = [
   "client",
   "transport-child-process",
 ] }
+tower = { version = "0.5", features = ["util"] }

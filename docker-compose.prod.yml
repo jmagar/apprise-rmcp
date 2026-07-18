@@ -1,26 +1,25 @@
 name: apprise-mcp
 
 x-common-service: &common-service
-  networks:
-    - apprise-mcp
+  networks: [apprise-mcp]
   restart: unless-stopped
-  extra_hosts:
-    - "host.docker.internal:host-gateway"
-  ulimits:
-    nofile:
-      soft: 65535
-      hard: 65535
+  init: true
+  user: "1000:1000"
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  tmpfs:
+    - /tmp:size=16m,mode=1777
   logging:
-    driver: "json-file"
+    driver: json-file
     options:
-      max-size: "10m"
+      max-size: 10m
       max-file: "3"
-      compress: "true"
 
 services:
   apprise-mcp:
     <<: *common-service
-    image: ghcr.io/jmagar/apprise-mcp:${APPRISE_MCP_VERSION:-latest}
+    image: ${APPRISE_MCP_IMAGE:-ghcr.io/jmagar/apprise-mcp:invalid-set-APPRISE_MCP_IMAGE-to-a-digest}
     container_name: apprise-mcp
     env_file:
       - path: .env
@@ -28,20 +27,19 @@ services:
     ports:
       - "${APPRISE_MCP_HOST_PORT:-40050}:40050/tcp"
     volumes:
-      - ${HOME}/.apprise:/data
+      - ${APPRISE_DATA_DIR:-${HOME}/.apprise}:/data
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:40050/health || exit 1"]
+      test: [CMD, curl, --fail, --silent, --show-error, --max-time, "5", http://localhost:40050/health]
       interval: 30s
-      timeout: 5s
+      timeout: 6s
       retries: 3
       start_period: 10s
     deploy:
       resources:
         limits:
           memory: 256M
-          cpus: '0.5'
+          cpus: "0.5"
 
 networks:
   apprise-mcp:
     name: ${DOCKER_NETWORK:-apprise-mcp}
-    external: true

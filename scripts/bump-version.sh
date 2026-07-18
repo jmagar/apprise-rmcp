@@ -1,62 +1,32 @@
 #!/usr/bin/env bash
-# bump-version.sh — update version in all version-bearing files atomically.
-#
-# Usage:
-#   ./scripts/bump-version.sh 1.3.5
-#   ./scripts/bump-version.sh patch   # auto-increment patch
-#   ./scripts/bump-version.sh minor   # auto-increment minor
-#   ./scripts/bump-version.sh major   # auto-increment major
-
 set -euo pipefail
-
-REPO_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-
-VERSION_FILES=(
-    "${REPO_ROOT}/Cargo.toml"
-    "${REPO_ROOT}/pyproject.toml"
-    "${REPO_ROOT}/.claude-plugin/plugin.json"
-    "${REPO_ROOT}/.codex-plugin/plugin.json"
-    "${REPO_ROOT}/.gemini-extension.json"
-)
-
-# Resolve gemini path (handles both naming conventions)
-if [ -f "${REPO_ROOT}/gemini-extension.json" ]; then
-    VERSION_FILES[3]="${REPO_ROOT}/gemini-extension.json"
-fi
-
-current_version() {
-    grep -m1 '"version"' "${REPO_ROOT}/.claude-plugin/plugin.json" \
-        | sed 's/.*"version": "\(.*\)".*/\1/'
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+version="${1:-}"
+[[ "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]] || {
+  echo "usage: $0 <semver>" >&2
+  exit 2
 }
-
-bump() {
-    local version="$1" part="$2"
-    local major minor patch
-    IFS='.' read -r major minor patch <<< "$version"
-    case "$part" in
-        major) echo "$((major + 1)).0.0" ;;
-        minor) echo "${major}.$((minor + 1)).0" ;;
-        patch) echo "${major}.${minor}.$((patch + 1))" ;;
-    esac
-}
-
-# Resolve new version
-ARG="${1:-}"
-CURRENT="$(current_version)"
-
-case "$ARG" in
-    major|minor|patch) NEW="$(bump "$CURRENT" "$ARG")" ;;
-    "") echo "Usage: $0 <version|major|minor|patch>"; exit 1 ;;
-    *) NEW="$ARG" ;;
-esac
-
-echo "Bumping $CURRENT → $NEW"
-
-for file in "${VERSION_FILES[@]}"; do
-    [ -f "$file" ] || { echo "  skip (not found): $file"; continue; }
-    sed -i "s/\"version\": \"${CURRENT}\"/\"version\": \"${NEW}\"/" "$file"
-    sed -i "s/^version = \"${CURRENT}\"/version = \"${NEW}\"/" "$file"
-    echo "  updated: ${file#"${REPO_ROOT}/"}"
-done
-
-echo "Done. Don't forget to add a CHANGELOG.md entry for ${NEW}."
+python3 - "${repo_root}" "${version}" <<'PY'
+import json, re, sys
+from pathlib import Path
+root, version = Path(sys.argv[1]), sys.argv[2]
+cargo_path = root / "Cargo.toml"
+cargo = cargo_path.read_text()
+cargo, count = re.subn(r"(?ms)(^\[package\].*?^version\s*=\s*)\"[^\"]+\"", rf'\g<1>"{version}"', cargo, count=1)
+if count != 1: raise SystemExit("unable to update Cargo.toml package.version")
+cargo_path.write_text(cargo)
+for relative in ["packages/apprise-rmcp/package.json", "server.json"]:
+    path = root / relative
+    data = json.loads(path.read_text())
+    data["version"] = version
+    if relative.endswith("package.json"): data["binaryVersion"] = version
+    for package in data.get("packages", []):
+        if "version" in package: package["version"] = version
+    if relative == "server.json":
+        data["_meta"]["io.modelcontextprotocol.registry/publisher-provided"]["buildInfo"]["version"] = version
+    path.write_text(json.dumps(data, indent=2) + "\n")
+manifest_path = root / ".release-please-manifest.json"
+manifest = json.loads(manifest_path.read_text()); manifest["."] = version
+manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
+PY
+"${repo_root}/scripts/check-version-sync.sh"

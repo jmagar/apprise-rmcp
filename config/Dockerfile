@@ -1,9 +1,9 @@
 # syntax=docker/dockerfile:1.7
 
-FROM rust:1.90-slim-bookworm AS builder
+FROM rust:1.90-slim-bookworm@sha256:64232e656c058f4468e8d024e990acff04f0fd5a5c0a88a574dc37773d7325c9 AS builder
 
 WORKDIR /app
-RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
 
 # Cache deps first (dummy main to warm the registry)
 COPY Cargo.toml Cargo.lock ./
@@ -23,9 +23,9 @@ RUN --mount=type=cache,id=apprise-cargo-registry,target=/usr/local/cargo/registr
     cp target/release/rapprise /usr/local/bin/rapprise
 
 # ── Runtime image ─────────────────────────────────────────────────────────────
-FROM debian:bookworm-slim
+FROM debian:bookworm-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818
 
-RUN apt-get update && apt-get install -y ca-certificates curl gosu && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /usr/local/bin/rapprise /usr/local/bin/rapprise
 
@@ -46,5 +46,6 @@ LABEL io.modelcontextprotocol.server.name="apprise-mcp"
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
+USER 1000:1000
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["serve", "mcp"]

@@ -1,8 +1,8 @@
 {
-  "name": "apprise-mcp",
-  "description": "Apprise MCP server — universal push notification bridge for Codex.",
-  "homepage": "https://github.com/jmagar/apprise-mcp",
-  "repository": "https://github.com/jmagar/apprise-mcp",
+  "name": "apprise-rmcp",
+  "description": "Apprise RMCP server — universal push notification bridge for Codex.",
+  "homepage": "https://github.com/jmagar/apprise-rmcp",
+  "repository": "https://github.com/jmagar/apprise-rmcp",
   "license": "MIT",
   "keywords": [
     "apprise",
@@ -23,13 +23,13 @@
       "Read",
       "Write"
     ],
-    "websiteURL": "https://github.com/jmagar/apprise-mcp",
+    "websiteURL": "https://github.com/jmagar/apprise-rmcp",
     "defaultPrompt": [
       "Send an alert to all configured Apprise notification services.",
       "Notify the ops-alerts tag that a deployment completed successfully.",
       "Check the Apprise notification server health status."
     ],
-    "brandColor": "#10B981"
+    "brandColor": "#29B6F6"
   },
   "author": {
     "name": "Jacob Magar",

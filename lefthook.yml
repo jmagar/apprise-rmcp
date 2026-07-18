@@ -8,3 +8,7 @@ pre-commit:
       run: taplo check {staged_files}
     env_guard:
       run: bash scripts/block-env-commits.sh
+    version_sync:
+      run: bash scripts/check-version-sync.sh
+    ci_policy:
+      run: bash scripts/check-ci-policy.sh

@@ -67,7 +67,11 @@
       "component": "apprise-rmcp",
       "changelog-path": "CHANGELOG.md",
       "extra-files": [
-        "packages/apprise-rmcp/package.json"
+        "packages/apprise-rmcp/package.json",
+        { "type": "json", "path": "packages/apprise-rmcp/package.json", "jsonpath": "$.binaryVersion" },
+        { "type": "json", "path": "server.json", "jsonpath": "$.version" },
+        { "type": "json", "path": "server.json", "jsonpath": "$.packages[0].version" },
+        { "type": "json", "path": "server.json", "jsonpath": "$._meta['io.modelcontextprotocol.registry/publisher-provided'].buildInfo.version" }
       ]
     }
   }

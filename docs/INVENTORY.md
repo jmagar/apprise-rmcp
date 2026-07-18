@@ -1,63 +1,107 @@
-# Inventory — apprise-mcp
+# apprise-rmcp contract inventory
 
-## MCP tool: `apprise`
+## Public surfaces
 
-All actions share the same tool. Set `action` to select the operation.
+| Surface | Contract |
+|---|---|
+| Repository/package | `apprise-rmcp` |
+| Rust crate/service | `apprise-mcp` |
+| Executable | `rapprise` |
+| MCP tool | `apprise` |
+| MCP HTTP/liveness | `POST /mcp`, `GET /health`, port `40050` |
+| Upstream default | `http://localhost:8000` |
+| Registry identity | `ai.dinglebear/apprise-rmcp` |
 
-| Action | Required args | Optional args | Description |
-|--------|---------------|---------------|-------------|
-| `notify` | `body` | `tag`, `title`, `type` | Send to tag (or all if tag omitted) |
-| `notify_url` | `urls`, `body` | `title`, `type` | Stateless one-off to Apprise URL schema |
-| `health` | — | — | Check Apprise server health |
-| `help` | — | — | Return inline documentation |
+## MCP actions
 
-### Argument reference
+| Action | Required | Optional | Effect |
+|---|---|---|---|
+| `notify` | `body` | `tag`, `title`, `type` | Send to tag, or all when omitted |
+| `notify_url` | `urls`, `body` | `title`, `type` | One-off Apprise URLs |
+| `health` | none | none | Check upstream health |
+| `status` | none | none | Authenticated deployment and runtime status |
+| `help` | none | none | Inline help |
 
-| Arg | Type | Description |
-|-----|------|-------------|
-| `action` | string (enum) | Required. One of: `notify`, `notify_url`, `health`, `help` |
-| `body` | string | Notification message text |
-| `tag` | string | Apprise tag; omit to send to all services |
-| `title` | string | Notification title (optional) |
-| `type` | string (enum) | `info` (default), `success`, `warning`, `failure` |
-| `urls` | string | Apprise URL schema (e.g. `slack://token`) — for `notify_url` only |
+Upstream JSON remains structured JSON; non-JSON success is returned as text.
+There is no guaranteed synthetic `{"ok":true,"response":...}` wrapper.
 
-## MCP prompt: `send_alert`
+## Canonical configuration inventory
 
-Guides the agent to send a critical failure-type notification with clear title and body.
+Environment overrides TOML. Secrets belong in process env or
+`${APPRISE_HOME:-~/.apprise}/.env` (`/data/.env` in containers).
 
-## CLI commands
+| TOML field | Environment | Default | Sensitive | Mode | Runtime support |
+|---|---|---|---:|---|---|
+| `apprise.url` | `APPRISE_URL` | `http://localhost:8000` | no | all | supported |
+| `apprise.token` | `APPRISE_TOKEN` | empty | yes | all | supported, outbound |
+| `mcp.host` | `APPRISE_MCP_HOST` | `0.0.0.0` | no | HTTP | supported |
+| `mcp.port` | `APPRISE_MCP_PORT` | `40050` | no | HTTP | supported |
+| `mcp.server_name` | none | `apprise-mcp` | no | all | supported |
+| `mcp.no_auth` | `APPRISE_MCP_NO_AUTH` | false | no | HTTP | loopback only |
+| `mcp.api_token` | `APPRISE_MCP_TOKEN` | empty | yes | bearer | supported |
+| `mcp.allowed_hosts` | `APPRISE_MCP_ALLOWED_HOSTS` | empty | no | HTTP | supported |
+| `mcp.allowed_origins` | `APPRISE_MCP_ALLOWED_ORIGINS` | empty | no | HTTP | supported |
+| `mcp.auth.mode` | `APPRISE_MCP_AUTH_MODE` | bearer | no | HTTP | bearer/oauth |
+| `mcp.auth.public_url` | `APPRISE_MCP_PUBLIC_URL` | empty | no | OAuth | required |
+| `mcp.auth.google_client_id` | `APPRISE_MCP_GOOGLE_CLIENT_ID` | empty | yes | OAuth | required |
+| `mcp.auth.google_client_secret` | `APPRISE_MCP_GOOGLE_CLIENT_SECRET` | empty | yes | OAuth | required |
+| `mcp.auth.admin_email` | `APPRISE_MCP_AUTH_ADMIN_EMAIL` | empty | personal | OAuth | required |
+| `mcp.auth.allowed_client_redirect_uris` | `APPRISE_MCP_AUTH_ALLOWED_REDIRECT_URIS` | empty | no | OAuth | supported |
+| `mcp.auth.sqlite_path` | `APPRISE_MCP_AUTH_SQLITE_PATH` | data-dir `auth.db` | no | OAuth | supported |
+| `mcp.auth.key_path` | `APPRISE_MCP_AUTH_KEY_PATH` | data-dir `auth-jwt.pem` | yes | OAuth | supported |
+| `mcp.auth.allowed_emails` | `APPRISE_MCP_AUTH_ALLOWED_EMAILS` | empty | personal | OAuth | supported |
+| `mcp.auth.access_token_ttl_secs` | `APPRISE_MCP_AUTH_ACCESS_TOKEN_TTL_SECS` | 3600 | no | OAuth | supported |
+| `mcp.auth.refresh_token_ttl_secs` | `APPRISE_MCP_AUTH_REFRESH_TOKEN_TTL_SECS` | 2592000 | no | OAuth | supported |
+| `mcp.auth.auth_code_ttl_secs` | `APPRISE_MCP_AUTH_CODE_TTL_SECS` | 300 | no | OAuth | supported |
+| `mcp.auth.register_rpm` | `APPRISE_MCP_AUTH_REGISTER_REQUESTS_PER_MINUTE` | 10 | no | OAuth | supported |
+| `mcp.auth.authorize_rpm` | `APPRISE_MCP_AUTH_AUTHORIZE_REQUESTS_PER_MINUTE` | 60 | no | OAuth | supported |
+| `mcp.auth.max_pending_oauth_states` | `APPRISE_MCP_AUTH_MAX_PENDING_OAUTH_STATES` | 1024 | no | OAuth | supported |
+| `mcp.auth.disable_static_token_with_oauth` | `APPRISE_MCP_DISABLE_STATIC_TOKEN_WITH_OAUTH` | true | no | OAuth | supported |
+| `apprise.max_concurrent_requests` | `APPRISE_MAX_CONCURRENT_REQUESTS` | 32, range 1..=1024 | no | all | supported |
+| `apprise.max_response_bytes` | `APPRISE_MAX_RESPONSE_BYTES` | 65536, range 1..=4194304 bytes | no | all | supported |
 
-| Command | Description |
-|---------|-------------|
-| `rapprise notify <body> [--tag T] [--title T] [--type ...]` | Send notification |
-| `rapprise notify-url <urls> <body> [--title T] [--type ...]` | Stateless notify |
-| `rapprise health [--json]` | Health check |
-| `rapprise serve` | Start MCP HTTP server |
-| `rapprise mcp` | Start MCP stdio transport |
-| `rapprise --help` | Usage |
-| `rapprise --version` | Version |
+`APPRISE_MCP_DISABLE_HTTP_AUTH` is a legacy no-auth alias. `APPRISE_HOME`
+selects runtime data outside Compose; `APPRISE_DATA_DIR` selects the host path
+mounted at `/data` by Compose. `RUST_LOG` defaults to `info`.
 
-## Environment variables
+## Authentication decision table
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `APPRISE_URL` | `http://localhost:8000` | Apprise API server base URL |
-| `APPRISE_TOKEN` | _(empty)_ | Bearer token for Apprise API (optional) |
-| `APPRISE_MCP_HOST` | `0.0.0.0` | MCP HTTP server bind host |
-| `APPRISE_MCP_PORT` | `40050` | MCP HTTP server bind port |
-| `APPRISE_MCP_TOKEN` | _(none)_ | Static bearer token for MCP HTTP auth |
-| `APPRISE_MCP_ALLOWED_ORIGINS` | _(none)_ | Comma-separated additional CORS origins |
-| `RUST_LOG` | `info` | Tracing log filter |
+| Transport/bind | Settings | Required behavior |
+|---|---|---|
+| stdio | any HTTP auth | HTTP settings do not apply |
+| HTTP loopback | `no_auth=true` | allowed for development |
+| HTTP non-loopback | `no_auth=true` | reject startup |
+| HTTP | bearer + token | require exact bearer token |
+| HTTP | bearer without token | reject outside explicit loopback development |
+| HTTP | OAuth | require OAuth/JWT plus issuer/client/admin state |
+| HTTP | OAuth + static disable true | static MCP token must not bypass OAuth |
 
-## HTTP endpoints (MCP server mode)
+TLS is required at the reverse proxy for network exposure. A proxy is not a
+substitute for the process bind/auth invariant.
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/mcp` | POST | MCP streamable HTTP transport |
-| `/health` | GET | MCP server liveness (always returns `{"status":"ok"}`) |
+## Installation and support
 
-## Known live instance
+| Path | Supported hosts | Trust status |
+|---|---|---|
+| Source | Rust-supported hosts | auditable local build |
+| npm/npx | Linux x86_64, Windows x86_64 | verifies SHA-256 and GitHub provenance, atomic install |
+| `scripts/install.sh` | Linux x86_64 | verifies SHA-256 and GitHub provenance |
+| Plugin | platform of bundled binary | build with `just build-plugin`; stdio only |
+| Container | image-supported Linux | pin immutable version/digest |
 
-- URL: `http://100.120.242.29:8766`
-- Token: _(none required)_
+macOS and Linux ARM64 are not mapped by the npm launcher.
+Releases publish offline GitHub build-provenance bundles. Installers verify the
+archive against the release workflow and tag and require GitHub CLI 2.68+.
+
+## Version model
+
+Crate, npm package, registry package, `server.json`, release manifest, Git tag,
+and assets are coupled. Release Please updates them together.
+
+## Temporary security exception
+
+`RUSTSEC-2023-0071` is currently accepted only because it is inherited through
+`lab-auth`/`jsonwebtoken` and no compatible fixed RSA release is available.
+This exception expires on 2026-08-18. Until replacement, keep OAuth registration/authorization
+rate limits enabled, restrict allowed accounts and redirect URIs, and monitor
+auth failures. A release must not silently extend this acceptance.
