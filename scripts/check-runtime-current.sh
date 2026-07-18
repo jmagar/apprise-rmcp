@@ -182,7 +182,10 @@ check_docker() {
   status_line service "$SERVICE"
 
   if [[ -d "$COMPOSE_DIR" ]]; then
-    cid="$(cd "$COMPOSE_DIR" && docker compose ps -q "$SERVICE" 2>/dev/null || true)"
+    cid="$(
+      cd "$COMPOSE_DIR"
+      docker compose ps -q "$SERVICE" 2>/dev/null || true
+    )"
   else
     cid=""
   fi

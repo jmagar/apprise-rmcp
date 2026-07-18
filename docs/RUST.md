@@ -20,7 +20,7 @@ The canonical reference is [soma/docs/RUST.md](https://github.com/jmagar/soma/bl
 
 ## System prerequisites
 
-- Rust stable ≥ 1.86 (`rustup update stable`)
+- Rust stable ≥ 1.90 (`rustup update stable`)
 - `clang` and `mold` for fast Linux builds: `apt install clang mold`
 - `just` command runner (optional): `cargo install just`
 

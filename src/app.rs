@@ -149,7 +149,7 @@ impl AppriseService {
                 "upstream_calls": snap.upstream_calls,
                 "upstream_errors": snap.upstream_errors,
             },
-            "upstream": { "url": self.apprise_url },
+            "upstream": { "url": redacted_url(&self.apprise_url) },
         });
         if let Some(config) = &self.config {
             out["config"] = json!({
@@ -218,5 +218,29 @@ fn attach_warning(mut value: Value, warning: Option<String>) -> Value {
         value
     } else {
         json!({ "result": value, "body_truncation_warning": warning })
+    }
+}
+
+fn redacted_url(value: &str) -> String {
+    let Ok(mut url) = url::Url::parse(value) else {
+        return "<invalid-url>".into();
+    };
+    let _ = url.set_username("");
+    let _ = url.set_password(None);
+    url.set_query(None);
+    url.set_fragment(None);
+    url.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::redacted_url;
+
+    #[test]
+    fn status_url_removes_credentials_query_and_fragment() {
+        assert_eq!(
+            redacted_url("https://user:secret@example.test:8443/api?token=hidden#fragment"),
+            "https://example.test:8443/api"
+        );
     }
 }

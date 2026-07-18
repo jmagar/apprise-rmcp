@@ -13,13 +13,15 @@ CURL_PROTOCOLS="${APPRISE_RMCP_CURL_PROTOCOLS:-=https}"
 
 usage() {
   cat <<'USAGE'
-Install a checksum-verified rapprise release archive.
+Install a checksum- and provenance-verified rapprise release archive.
 
 Environment:
   APPRISE_RMCP_VERSION     Required immutable release tag, for example v0.1.3
   INSTALL_DIR              Destination directory (default: ~/.local/bin)
   APPRISE_RMCP_REPO        GitHub repo owner/name (default: jmagar/apprise-rmcp)
   APPRISE_RMCP_RELEASE_BASE_URL  Test/mirror base URL
+
+Requires GitHub CLI 2.68+ for offline attestation verification.
 USAGE
 }
 
@@ -37,6 +39,21 @@ need() {
   command -v "$1" >/dev/null 2>&1 || { echo "error: $1 is required" >&2; exit 1; }
 }
 
+require_gh_version() {
+  local version major minor
+  version="$(gh --version | head -1)"
+  if [[ ! "$version" =~ gh\ version\ ([0-9]+)\.([0-9]+)\. ]]; then
+    echo "error: unable to determine GitHub CLI version" >&2
+    exit 1
+  fi
+  major="${BASH_REMATCH[1]}"
+  minor="${BASH_REMATCH[2]}"
+  if (( major < 2 || (major == 2 && minor < 68) )); then
+    echo "error: GitHub CLI 2.68+ is required for provenance verification" >&2
+    exit 1
+  fi
+}
+
 target_asset() {
   local os arch
   os="$(uname -s | tr '[:upper:]' '[:lower:]')"
@@ -49,6 +66,8 @@ target_asset() {
 }
 
 need curl
+need gh
+require_gh_version
 need install
 need mktemp
 need tar
@@ -81,6 +100,7 @@ curl_args=(--fail --silent --show-error --location --connect-timeout "${CONNECT_
 echo "Downloading ${url}" >&2
 curl "${curl_args[@]}" "${url}" -o "${tmpdir}/${asset}"
 curl "${curl_args[@]}" "${url}.sha256" -o "${tmpdir}/${asset}.sha256"
+curl "${curl_args[@]}" "${url}.sigstore.json" -o "${tmpdir}/${asset}.sigstore.json"
 
 expected="$(awk 'NR == 1 {print $1}' "${tmpdir}/${asset}.sha256")"
 if [[ ! "${expected}" =~ ^[0-9a-fA-F]{64}$ ]]; then
@@ -92,6 +112,16 @@ if [[ "${actual,,}" != "${expected,,}" ]]; then
   echo "error: SHA256 mismatch for ${asset}" >&2
   exit 1
 fi
+
+gh attestation verify "${tmpdir}/${asset}" \
+  --repo "${REPO}" \
+  --bundle "${tmpdir}/${asset}.sigstore.json" \
+  --signer-workflow "${REPO}/.github/workflows/release.yml" \
+  --source-ref "refs/tags/${VERSION}" \
+  --deny-self-hosted-runners >/dev/null || {
+    echo "error: release provenance verification failed" >&2
+    exit 1
+  }
 
 mapfile -t entries < <(tar -tzf "${tmpdir}/${asset}")
 if (( ${#entries[@]} != 1 )) || [[ "${entries[0]#./}" != "${BINARY_NAME}" && "${entries[0]#./}" != "${BINARY_NAME}.exe" ]]; then

@@ -19,6 +19,7 @@
 | `notify` | `body` | `tag`, `title`, `type` | Send to tag, or all when omitted |
 | `notify_url` | `urls`, `body` | `title`, `type` | One-off Apprise URLs |
 | `health` | none | none | Check upstream health |
+| `status` | none | none | Authenticated deployment and runtime status |
 | `help` | none | none | Inline help |
 
 Upstream JSON remains structured JSON; non-JSON success is returned as text.
@@ -56,11 +57,12 @@ Environment overrides TOML. Secrets belong in process env or
 | `mcp.auth.authorize_rpm` | `APPRISE_MCP_AUTH_AUTHORIZE_REQUESTS_PER_MINUTE` | 60 | no | OAuth | supported |
 | `mcp.auth.max_pending_oauth_states` | `APPRISE_MCP_AUTH_MAX_PENDING_OAUTH_STATES` | 1024 | no | OAuth | supported |
 | `mcp.auth.disable_static_token_with_oauth` | `APPRISE_MCP_DISABLE_STATIC_TOKEN_WITH_OAUTH` | true | no | OAuth | supported |
-| `apprise.max_concurrent_requests` | `APPRISE_MAX_CONCURRENT_REQUESTS` | 32 | no | all | supported |
-| `apprise.max_response_bytes` | `APPRISE_MAX_RESPONSE_BYTES` | 65536 | no | all | supported |
+| `apprise.max_concurrent_requests` | `APPRISE_MAX_CONCURRENT_REQUESTS` | 32, range 1..=1024 | no | all | supported |
+| `apprise.max_response_bytes` | `APPRISE_MAX_RESPONSE_BYTES` | 65536, range 1..=4194304 bytes | no | all | supported |
 
 `APPRISE_MCP_DISABLE_HTTP_AUTH` is a legacy no-auth alias. `APPRISE_HOME`
-selects host data. `RUST_LOG` defaults to `info`.
+selects runtime data outside Compose; `APPRISE_DATA_DIR` selects the host path
+mounted at `/data` by Compose. `RUST_LOG` defaults to `info`.
 
 ## Authentication decision table
 
@@ -82,14 +84,14 @@ substitute for the process bind/auth invariant.
 | Path | Supported hosts | Trust status |
 |---|---|---|
 | Source | Rust-supported hosts | auditable local build |
-| npm/npx | Linux x86_64, Windows x86_64 | verifies published SHA-256, atomic install |
-| `scripts/install.sh` | Linux x86_64 | verifies published SHA-256 |
-| Plugin | platform of bundled binary | build with `just plugin-build`; stdio only |
+| npm/npx | Linux x86_64, Windows x86_64 | verifies SHA-256 and GitHub provenance, atomic install |
+| `scripts/install.sh` | Linux x86_64 | verifies SHA-256 and GitHub provenance |
+| Plugin | platform of bundled binary | build with `just build-plugin`; stdio only |
 | Container | image-supported Linux | pin immutable version/digest |
 
 macOS and Linux ARM64 are not mapped by the npm launcher.
-Releases publish GitHub build-provenance attestations; installers do not
-automatically verify those attestations.
+Releases publish offline GitHub build-provenance bundles. Installers verify the
+archive against the release workflow and tag and require GitHub CLI 2.68+.
 
 ## Version model
 
@@ -100,7 +102,6 @@ and assets are coupled. Release Please updates them together.
 
 `RUSTSEC-2023-0071` is currently accepted only because it is inherited through
 `lab-auth`/`jsonwebtoken` and no compatible fixed RSA release is available.
-This exception expires before the next production release or 2026-08-18,
-whichever comes first. Until replacement, keep OAuth registration/authorization
+This exception expires on 2026-08-18. Until replacement, keep OAuth registration/authorization
 rate limits enabled, restrict allowed accounts and redirect URIs, and monitor
 auth failures. A release must not silently extend this acceptance.

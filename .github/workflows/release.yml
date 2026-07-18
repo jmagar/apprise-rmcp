@@ -3,11 +3,6 @@ name: Release
 on:
   release:
     types: [published]
-  workflow_dispatch:
-    inputs:
-      tag_name:
-        description: "Existing immutable release tag, for example v0.1.3"
-        required: true
 
 permissions:
   contents: read
@@ -23,17 +18,17 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           EVENT_TAG: ${{ github.event.release.tag_name }}
-          INPUT_TAG: ${{ inputs.tag_name }}
         run: |
           set -euo pipefail
-          [[ "$EVENT_NAME" == release ]] && tag="$EVENT_TAG" || tag="$INPUT_TAG"
+          [[ "$EVENT_NAME" == release ]] || { echo "::error::release workflow requires a published release event"; exit 1; }
+          tag="$EVENT_TAG"
           [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]] || { echo "::error::invalid release tag: $tag"; exit 1; }
           echo "tag_name=$tag" >> "$GITHUB_OUTPUT"
 
   preflight:
     needs: release-meta
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
@@ -48,8 +43,30 @@ jobs:
         env:
           EXPECTED_VERSION: ${{ needs.release-meta.outputs.tag_name }}
         run: bash scripts/check-version-sync.sh
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+        with:
+          components: rustfmt,clippy
+      - uses: taiki-e/install-action@6d9ce389421e24f7b73aff5e841bbe5a6b4c974c # nextest
+        with:
+          tool: nextest@0.9.100
+      - uses: taiki-e/install-action@6d9ce389421e24f7b73aff5e841bbe5a6b4c974c # cargo-audit
+        with:
+          tool: cargo-audit@0.22.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+      - run: cargo nextest run --workspace --all-features --profile ci
+      # Vulnerabilities are always fatal; deny unsound advisories explicitly.
+      # The locked graph currently carries a tracked yanked-only spin warning.
+      - run: cargo audit --deny unsound
       - run: bash scripts/check-ci-policy.sh
+      - run: bash scripts/validate-plugin-layout.sh
+      - run: bash tests/docs-contract.sh
+      - run: shellcheck install.sh entrypoint.sh scripts/*.sh tests/*.sh
       - run: npm test --prefix packages/apprise-rmcp
+      - run: npm run check --prefix packages/apprise-rmcp
 
   build:
     needs: [release-meta, preflight]
@@ -100,19 +117,52 @@ jobs:
           cp "${{ matrix.artifact }}" "archive/rapprise${{ matrix.ext }}"
           tar -C archive -czf "${{ matrix.archive }}" "rapprise${{ matrix.ext }}"
           sha256sum "${{ matrix.archive }}" > "${{ matrix.archive }}.sha256"
-      - name: Attest the exact archive consumed by installers
+      - id: attestation
+        name: Attest the exact archive consumed by installers
         uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
         with:
           subject-path: ${{ matrix.archive }}
+      - name: Stage offline attestation bundle
+        run: cp "${{ steps.attestation.outputs.bundle-path }}" "${{ matrix.archive }}.sigstore.json"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ matrix.archive }}
           path: |
             ${{ matrix.archive }}
             ${{ matrix.archive }}.sha256
+            ${{ matrix.archive }}.sigstore.json
+
+  build-installer:
+    needs: [release-meta, preflight]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ needs.release-meta.outputs.tag_name }}
+          persist-credentials: false
+      - run: |
+          cp scripts/install.sh rapprise-installer.sh
+          sha256sum rapprise-installer.sh > rapprise-installer.sh.sha256
+      - id: attestation
+        uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
+        with:
+          subject-path: rapprise-installer.sh
+      - run: cp "${{ steps.attestation.outputs.bundle-path }}" rapprise-installer.sh.sigstore.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: rapprise-installer
+          path: |
+            rapprise-installer.sh
+            rapprise-installer.sh.sha256
+            rapprise-installer.sh.sigstore.json
 
   publish-release:
-    needs: [release-meta, preflight, build]
+    needs: [release-meta, preflight, build, build-installer]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

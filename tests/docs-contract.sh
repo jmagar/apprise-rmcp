@@ -37,4 +37,26 @@ test "$(jq -r '.mcpServers.apprise.command' plugins/apprise/.mcp.json)" = \
   "$expected_plugin_command"
 test -z "$(find .claude/plugins/apprise-mcp -type f -print 2>/dev/null)"
 
+rg -F 'gh attestation verify rapprise-installer.sh' README.md >/dev/null
+if rg -F 'raw.githubusercontent.com/jmagar/apprise-rmcp' README.md >/dev/null; then
+  echo "README must not execute unverified raw installer content" >&2
+  exit 1
+fi
+rg -F 'just build-plugin && claude plugin install' README.md >/dev/null
+rg -F 'just build-plugin' docs/QUICKSTART.md >/dev/null
+just --summary | tr ' ' '\n' | rg -x 'build-plugin' >/dev/null
+rg -F 'notify`, `notify_url`, `health`, `status`, `help' CLAUDE.md >/dev/null
+rg -F 'APPRISE_MCP_IMAGE=ghcr.io/jmagar/apprise-mcp@sha256:' .env.example >/dev/null
+if rg -F 'APPRISE_MCP_VERSION=' .env.example >/dev/null; then
+  echo ".env.example contains obsolete APPRISE_MCP_VERSION" >&2
+  exit 1
+fi
+rg -F 'GitHub CLI 2.68+' README.md docs/INVENTORY.md packages/apprise-rmcp/README.md >/dev/null
+rg -F 'APPRISE_DATA_DIR=${HOME}/.apprise' .env.example >/dev/null
+rg -F '${APPRISE_DATA_DIR:-${HOME}/.apprise}:/data' docker-compose.prod.yml >/dev/null
+if rg -F '${APPRISE_HOME:-${HOME}/.apprise}:/data' docker-compose.prod.yml; then
+  echo "Compose must not pass a host APPRISE_HOME path into the container" >&2
+  exit 1
+fi
+
 echo "documentation and plugin contracts are consistent"

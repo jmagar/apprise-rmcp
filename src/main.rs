@@ -33,11 +33,15 @@ async fn main() -> Result<()> {
         || matches!(args.as_slice(), [c] if c == "serve")
         || matches!(args.as_slice(), [a, b] if a == "serve" && b == "mcp");
 
-    if serve_mode {
-        apprise_mcp::logging::init(&apprise_mcp::config::default_data_dir(), "info")?;
+    let _log_guard = if serve_mode {
+        Some(apprise_mcp::logging::init(
+            &apprise_mcp::config::default_data_dir(),
+            "info",
+        )?)
     } else {
         apprise_mcp::logging::init_console("warn");
-    }
+        None
+    };
 
     if serve_mode {
         serve_mcp().await
@@ -50,7 +54,8 @@ async fn main() -> Result<()> {
 
 async fn serve_mcp() -> Result<()> {
     let config = Config::load()?;
-    let state = build_state(config).await?;
+    let prepared = build_state(config).await?;
+    let state = prepared.state;
 
     info!(
         bind = %state.config.bind_addr(),
@@ -59,9 +64,10 @@ async fn serve_mcp() -> Result<()> {
         "apprise-mcp starting"
     );
 
-    let bind = state.config.bind_addr();
+    let bind_addrs = prepared.bind_addrs;
     let app = mcp::router(state).layer(tower_http::trace::TraceLayer::new_for_http());
-    let listener = tokio::net::TcpListener::bind(&bind).await?;
+    let listener = tokio::net::TcpListener::bind(bind_addrs.as_slice()).await?;
+    let bind = listener.local_addr()?;
     info!(bind = %bind, "MCP HTTP server listening");
 
     axum::serve(listener, app.into_make_service())

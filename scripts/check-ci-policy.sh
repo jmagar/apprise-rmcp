@@ -23,13 +23,21 @@ docker = (workflow_dir / "docker-publish.yml").read_text()
 for required in ["workflow_run:", "exit-code: \"1\"", "actions/attest-sbom@"]:
     if required not in docker:
         errors.append(f"docker-publish.yml: missing policy marker {required!r}")
-scan = docker.find("Blocking vulnerability scan")
+scan_amd64 = docker.find("Blocking AMD64 vulnerability scan")
+scan_arm64 = docker.find("Blocking ARM64 vulnerability scan")
 login = docker.find("Log in only after")
-push = docker.find("Push the exact scanned image")
-if not (0 <= scan < login < push):
-    errors.append("docker-publish.yml: scan must precede registry login and push")
+push = docker.find("Push scanned platform images")
+if not (0 <= scan_amd64 < scan_arm64 < login < push):
+    errors.append("docker-publish.yml: both platform scans must precede registry login and push")
+if "workflows: [CI, Release]" not in docker or "release:" in docker.split("permissions:", 1)[0]:
+    errors.append("docker-publish.yml: publication must follow successful CI or Release workflows, not a direct release event")
+for marker in ["workflow_run.event == 'push'", "workflow_run.head_repository.full_name == github.repository", "git merge-base --is-ancestor HEAD origin/main"]:
+    if marker not in docker:
+        errors.append(f"docker-publish.yml: privileged workflow_run is missing trust gate {marker!r}")
 
 release = (workflow_dir / "release.yml").read_text()
+if "workflow_dispatch:" in release:
+    errors.append("release.yml: provenance-bearing releases must not run from an ambiguous manual ref")
 preflight = release.find("preflight:")
 build = release.find("build:")
 if preflight < 0 or build < preflight or "needs: [release-meta, preflight]" not in release:
@@ -49,14 +57,20 @@ if lock.get("packages", {}).get("", {}).get("dependencies", {}).get("openwiki") 
 
 audit = Path(".cargo/audit.toml").read_text()
 expiry = re.search(r"expires (\d{4}-\d{2}-\d{2})", audit)
-if "RUSTSEC-2023-0071" in audit and (not expiry or datetime.date.today() > datetime.date.fromisoformat(expiry.group(1))):
+if "RUSTSEC-2023-0071" in audit and (not expiry or datetime.date.today() >= datetime.date.fromisoformat(expiry.group(1))):
     errors.append(".cargo/audit.toml: RSA advisory exception is missing an active expiry")
+inventory = Path("docs/INVENTORY.md").read_text()
+if expiry and f"expires on {expiry.group(1)}" not in inventory:
+    errors.append("docs/INVENTORY.md: advisory expiry must match .cargo/audit.toml")
 
-for installer in [Path("scripts/install.sh"), Path("packages/apprise-rmcp/scripts/install.js")]:
+for installer in [Path("install.sh"), Path("scripts/install.sh"), Path("packages/apprise-rmcp/scripts/install.js")]:
     text = installer.read_text()
     for marker in ["sha256", "timeout", "redirect"]:
         if marker.lower() not in text.lower():
             errors.append(f"{installer}: missing installer trust marker {marker}")
+    for marker in ["attestation", "signer-workflow", "source-ref"]:
+        if marker not in text:
+            errors.append(f"{installer}: missing provenance policy marker {marker}")
 
 if errors:
     raise SystemExit("\n".join(f"ERROR: {error}" for error in errors))

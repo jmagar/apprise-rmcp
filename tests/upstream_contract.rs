@@ -133,6 +133,65 @@ async fn readiness_reports_unavailable_upstream() {
 }
 
 #[tokio::test]
+async fn configured_auth_protects_readiness_and_status_but_not_liveness() {
+    let mut state = apprise_mcp::testing::stub_state();
+    state.auth_policy = AuthPolicy::Mounted { auth_state: None };
+    state.config.api_token = Some("mcp-secret".into());
+    let app = apprise_mcp::mcp::router(state);
+
+    let public_health = app
+        .clone()
+        .oneshot(
+            axum::http::Request::builder()
+                .uri("/health")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(public_health.status(), StatusCode::OK);
+
+    for path in ["/ready", "/status"] {
+        let denied = app
+            .clone()
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri(path)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(denied.status(), StatusCode::UNAUTHORIZED, "{path}");
+    }
+
+    let status = app
+        .clone()
+        .oneshot(
+            axum::http::Request::builder()
+                .uri("/status")
+                .header("authorization", "Bearer mcp-secret")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(status.status(), StatusCode::OK);
+
+    let ready = app
+        .oneshot(
+            axum::http::Request::builder()
+                .uri("/ready")
+                .header("authorization", "Bearer mcp-secret")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(ready.status(), StatusCode::SERVICE_UNAVAILABLE);
+}
+
+#[tokio::test]
 async fn bearer_auth_rejects_missing_and_accepts_matching_token() {
     let layer = build_auth_layer(
         &AuthPolicy::Mounted { auth_state: None },

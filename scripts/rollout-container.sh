@@ -8,7 +8,21 @@ state_file="${APPRISE_MCP_DEPLOY_STATE:-${state_dir}/deployment-state}"
 service="apprise-mcp"
 
 valid_image() {
-  [[ "$1" =~ ^[a-zA-Z0-9._/-]+(:[a-zA-Z0-9._-]+)?@sha256:[0-9a-f]{64}$ ]]
+  [[ "$1" =~ ^[a-zA-Z0-9._:/-]+@sha256:[0-9a-f]{64}$ ]]
+}
+
+current_image() {
+  local configured image_id resolved
+  configured="$(docker inspect "$service" --format '{{.Config.Image}}' 2>/dev/null || true)"
+  if valid_image "$configured"; then
+    echo "$configured"
+    return
+  fi
+  image_id="$(docker inspect "$service" --format '{{.Image}}' 2>/dev/null || true)"
+  [[ -n "$image_id" ]] || return 1
+  resolved="$(docker image inspect "$image_id" --format '{{index .RepoDigests 0}}' 2>/dev/null || true)"
+  valid_image "$resolved" || return 1
+  echo "$resolved"
 }
 
 read_state() {
@@ -33,12 +47,19 @@ wait_healthy() {
 deploy() {
   local image="$1" previous="" temporary
   valid_image "$image" || { echo "error: image must be an immutable registry reference ending in @sha256:<64 hex>" >&2; exit 2; }
-  previous="$(docker inspect "$service" --format '{{.Config.Image}}' 2>/dev/null || true)"
+  previous="$(current_image || true)"
   APPRISE_MCP_IMAGE="$image" docker compose -f "$compose_file" pull "$service"
   APPRISE_MCP_IMAGE="$image" docker compose -f "$compose_file" up -d --no-build --force-recreate "$service"
   if ! wait_healthy "$image"; then
     echo "error: deployment did not become healthy" >&2
-    [[ -z "$previous" ]] || APPRISE_MCP_IMAGE="$previous" docker compose -f "$compose_file" up -d --no-build --force-recreate "$service"
+    if [[ -n "$previous" ]]; then
+      APPRISE_MCP_IMAGE="$previous" docker compose -f "$compose_file" up -d --no-build --force-recreate "$service"
+      if ! wait_healthy "$previous"; then
+        echo "error: rollback also failed to become healthy" >&2
+        exit 1
+      fi
+      echo "rolled back to $previous" >&2
+    fi
     exit 1
   fi
   mkdir -p "$state_dir"

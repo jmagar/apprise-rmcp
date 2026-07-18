@@ -6,7 +6,15 @@ const http = require("node:http");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
-const { atomicInstall, download, verifyChecksum } = require("../scripts/install");
+const {
+  atomicInstall,
+  download,
+  parseControl,
+  requireGhVersion,
+  resolveRedirect,
+  verifyAttestation,
+  verifyChecksum,
+} = require("../scripts/install");
 
 function listen(handler) {
   return new Promise((resolve) => {
@@ -76,4 +84,56 @@ test("atomic install preserves the old binary until replacement is ready", (t) =
   atomicInstall(source, destination);
   assert.equal(fs.readFileSync(destination, "utf8"), "new");
   assert.equal(fs.statSync(destination).mode & 0o777, 0o755);
+});
+
+test("numeric installer controls reject non-finite and out-of-range values", () => {
+  assert.equal(parseControl(undefined, 10, "timeout", { minimum: 1 }), 10);
+  assert.equal(parseControl("25", 10, "timeout", { minimum: 1 }), 25);
+  assert.throws(() => parseControl("garbage", 10, "timeout", { minimum: 1 }), /positive integer/);
+  assert.throws(() => parseControl("0", 10, "timeout", { minimum: 1 }), /positive integer/);
+  assert.throws(() => parseControl("-1", 5, "redirects", { minimum: 0 }), /non-negative integer/);
+});
+
+test("HTTPS downloads reject redirects to plaintext HTTP", () => {
+  assert.equal(resolveRedirect("https://example.test/start", "/next"), "https://example.test/next");
+  assert.equal(resolveRedirect("http://127.0.0.1/start", "/next"), "http://127.0.0.1/next");
+  assert.throws(
+    () => resolveRedirect("https://example.test/start", "http://example.test/next"),
+    /refusing HTTPS downgrade/,
+  );
+});
+
+test("GitHub CLI version gate requires source-ref support", () => {
+  assert.doesNotThrow(() => requireGhVersion(() => ({ status: 0, stdout: "gh version 2.68.0 (test)\n" })));
+  assert.throws(
+    () => requireGhVersion(() => ({ status: 0, stdout: "gh version 2.67.1 (test)\n" })),
+    /2\.68\+/,
+  );
+  assert.throws(() => requireGhVersion(() => ({ status: 127, stdout: "" })), /2\.68\+/);
+});
+
+test("attestation verification pins repository, workflow, tag, and denies self-hosted signers", () => {
+  let invocation;
+  const result = verifyAttestation("archive.tar.gz", "archive.sigstore.json", "jmagar/apprise-rmcp", "v1.2.3", (command, args, options) => {
+    invocation = { command, args, options };
+    return { status: 0 };
+  });
+  assert.equal(result, undefined);
+  assert.equal(invocation.command, "gh");
+  assert.deepEqual(invocation.args, [
+    "attestation", "verify", "archive.tar.gz",
+    "--repo", "jmagar/apprise-rmcp",
+    "--bundle", "archive.sigstore.json",
+    "--signer-workflow", "jmagar/apprise-rmcp/.github/workflows/release.yml",
+    "--source-ref", "refs/tags/v1.2.3",
+    "--deny-self-hosted-runners",
+  ]);
+  assert.equal(invocation.options.stdio, "inherit");
+});
+
+test("attestation verification fails closed", () => {
+  assert.throws(
+    () => verifyAttestation("archive.tar.gz", "archive.sigstore.json", "jmagar/apprise-rmcp", "v1.2.3", () => ({ status: 1 })),
+    /provenance verification failed/,
+  );
 });

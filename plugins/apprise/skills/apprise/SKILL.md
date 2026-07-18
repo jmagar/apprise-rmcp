@@ -123,27 +123,27 @@ rapprise health
 
 ## Tier 3 (Last Resort): Direct REST API
 
-Uses `$APPRISE_URL`. Add `-H "Authorization: Bearer $APPRISE_TOKEN"` and
+Uses `${APPRISE_URL:-http://localhost:8000}`. Add `-H "Authorization: Bearer $APPRISE_TOKEN"` and
 `-H "X-Apprise-API-Key: $APPRISE_TOKEN"` if auth is required.
 
 ```bash
 # Notify a tag group
-curl -X POST "$APPRISE_URL/notify/servers" \
+curl -X POST "${APPRISE_URL:-http://localhost:8000}/notify/servers" \
   -H "Content-Type: application/json" \
   -d '{"title":"Disk Warning","body":"Disk at 95%","type":"warning"}'
 
 # Notify all configured services
-curl -X POST "$APPRISE_URL/notify" \
+curl -X POST "${APPRISE_URL:-http://localhost:8000}/notify" \
   -H "Content-Type: application/json" \
   -d '{"title":"CI/CD","body":"Deploy complete","type":"success"}'
 
 # Stateless — include "urls" field, trailing slash required
-curl -X POST "$APPRISE_URL/notify/" \
+curl -X POST "${APPRISE_URL:-http://localhost:8000}/notify/" \
   -H "Content-Type: application/json" \
   -d '{"urls":"slack://tokenA/tokenB/tokenC","title":"CI","body":"Build failed","type":"failure"}'
 
 # Health check
-curl "$APPRISE_URL/health"
+curl "${APPRISE_URL:-http://localhost:8000}/health"
 ```
 
 ---

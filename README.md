@@ -76,14 +76,13 @@ the short Rust CLI name `rapprise`.
 | Path | Command | Best for | Notes |
 |---|---|---|---|
 | npm / npx | `npx -y apprise-rmcp --help` | Linux/Windows x86_64 clients. | Verifies the release archive SHA-256 before atomic install. |
-| Release installer | `curl -fsSL https://raw.githubusercontent.com/jmagar/apprise-rmcp/main/scripts/install.sh \| bash` | Linux x86_64 without Node. | Verifies the published SHA-256 before install. |
+| Release installer | [Verified installer procedure](#verified-release-installer) | Linux x86_64 without Node. | Verifies checksum and offline provenance before executing installer code. |
 | Docker / Compose | `docker compose up -d` | Shared HTTP MCP deployments. | Reads `.env` and exposes container port `40050`. |
 | Build from source | `cargo build --release` | Development and audits. | Produces `target/release/rapprise`. |
-| Plugin | `just plugin-build && claude plugin install ./plugins/apprise` | Claude Code from this checkout. | Bundled `rapprise` stdio plugin. |
+| Plugin | `just build-plugin && claude plugin install ./plugins/apprise` | Claude Code from this checkout. | Bundled `rapprise` stdio plugin. |
 
-Releases publish SHA-256 files and GitHub build-provenance attestations. The
-installers enforce the checksum but do not automatically verify the attestation;
-high-assurance installs should verify it independently or build from source.
+Releases publish SHA-256 files and offline GitHub build-provenance bundles. The
+installers verify both the checksum and provenance identity with GitHub CLI 2.68+.
 macOS and ARM64 are not currently mapped by the npm launcher.
 
 ### npm / npx
@@ -106,6 +105,34 @@ behavior only when testing packaging:
 | `APPRISE_RMCP_REPO` | Select the GitHub repo used for release downloads. |
 | `APPRISE_RMCP_RELEASE_BASE_URL` | Select a custom release base URL. |
 
+Verified binary installation is fail-closed and pins the repository, release
+workflow, and source tag. Install `gh` 2.68 or newer before using npm or the
+release installer.
+
+### Verified Release Installer
+
+Download the installer and its verification material without executing it,
+then verify both integrity and provenance before running it:
+
+```bash
+version=v0.1.3
+base="https://github.com/jmagar/apprise-rmcp/releases/download/${version}/rapprise-installer.sh"
+curl -fsSLO "$base"
+curl -fsSLO "$base.sha256"
+curl -fsSLO "$base.sigstore.json"
+sha256sum --check rapprise-installer.sh.sha256
+gh attestation verify rapprise-installer.sh \
+  --repo jmagar/apprise-rmcp \
+  --bundle rapprise-installer.sh.sigstore.json \
+  --signer-workflow jmagar/apprise-rmcp/.github/workflows/release.yml \
+  --source-ref "refs/tags/${version}" \
+  --deny-self-hosted-runners
+APPRISE_RMCP_VERSION="$version" bash rapprise-installer.sh
+```
+
+The npm launcher supports Windows x86_64 only when GitHub CLI 2.68+ is installed
+and `gh.exe` is available on `PATH`; provenance verification is not skipped.
+
 ### Build From Source
 
 ```bash
@@ -115,7 +142,7 @@ cargo build --release
 ./target/release/rapprise --help
 ```
 
-Minimum supported Rust version: 1.86.
+Minimum supported Rust version: 1.90.
 
 ## Quickstart
 
@@ -248,6 +275,7 @@ the operation.
 | Action | Description | Required params | Optional params |
 |---|---|---|---|
 | `health` | Check Apprise API server health. | none | none |
+| `status` | Return authenticated deployment and runtime status. | none | none |
 | `help` | Return built-in markdown tool help. | none | none |
 
 ### Write Actions

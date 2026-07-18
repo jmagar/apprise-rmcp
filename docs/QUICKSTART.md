@@ -1,7 +1,8 @@
 # apprise-rmcp quickstart
 
-Prerequisites are an Apprise API server plus Rust 1.86+ for source builds or
-Node.js for the npm launcher. `APPRISE_URL` is optional and defaults to
+Prerequisites are an Apprise API server plus Rust 1.90+ for source builds or
+Node.js plus GitHub CLI 2.68+ for the verified npm launcher. Windows users must
+have `gh.exe` on `PATH`. `APPRISE_URL` is optional and defaults to
 `http://localhost:8000`.
 
 ```bash
@@ -46,7 +47,7 @@ Any non-loopback deployment requires bearer or OAuth auth and TLS. See the
 The plugin is bundled stdio, not a service deployer:
 
 ```bash
-just plugin-build
+just build-plugin
 claude plugin install ./plugins/apprise
 ```
 

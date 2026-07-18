@@ -9,7 +9,7 @@
 - Executable: `rapprise`
 - MCP HTTP port: `40050`
 - Upstream default: `http://localhost:8000`
-- One `apprise` tool: `notify`, `notify_url`, `health`, `help`
+- One `apprise` tool: `notify`, `notify_url`, `health`, `status`, `help`
 - Data: `${APPRISE_HOME:-~/.apprise}` on hosts, `/data` in containers
 
 ## Architecture

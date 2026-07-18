@@ -7,6 +7,8 @@ use thiserror::Error;
 
 const DEFAULT_MAX_CONCURRENT_REQUESTS: usize = 32;
 const DEFAULT_MAX_RESPONSE_BYTES: usize = 64 * 1024;
+const MAX_CONCURRENT_REQUESTS: usize = 1_024;
+const MAX_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
 
 #[derive(Debug, Error)]
 pub enum ConfigError {
@@ -420,16 +422,16 @@ impl Config {
         if !matches!(url.scheme(), "http" | "https") || url.host_str().is_none() {
             return Err(ConfigError::InvalidAppriseUrl(self.apprise.url.clone()));
         }
-        if self.apprise.max_concurrent_requests == 0 {
+        if !(1..=MAX_CONCURRENT_REQUESTS).contains(&self.apprise.max_concurrent_requests) {
             return Err(ConfigError::InvalidValue {
                 key: "APPRISE_MAX_CONCURRENT_REQUESTS".into(),
-                value: "0".into(),
+                value: self.apprise.max_concurrent_requests.to_string(),
             });
         }
-        if self.apprise.max_response_bytes == 0 {
+        if !(1..=MAX_RESPONSE_BYTES).contains(&self.apprise.max_response_bytes) {
             return Err(ConfigError::InvalidValue {
                 key: "APPRISE_MAX_RESPONSE_BYTES".into(),
-                value: "0".into(),
+                value: self.apprise.max_response_bytes.to_string(),
             });
         }
         Ok(())
@@ -546,6 +548,37 @@ mod tests {
             load_dotenv_from(&path),
             Err(ConfigError::Dotenv { .. })
         ));
+    }
+
+    #[test]
+    fn excessive_concurrency_is_rejected_during_config_load() {
+        let missing = Path::new("/definitely/missing/config.toml");
+        let result = Config::load_from_sources(
+            missing,
+            [],
+            [(
+                "APPRISE_MAX_CONCURRENT_REQUESTS".into(),
+                usize::MAX.to_string(),
+            )],
+            [],
+        );
+        assert!(
+            matches!(result, Err(ConfigError::InvalidValue { key, .. }) if key == "APPRISE_MAX_CONCURRENT_REQUESTS")
+        );
+    }
+
+    #[test]
+    fn excessive_response_limit_is_rejected_during_config_load() {
+        let missing = Path::new("/definitely/missing/config.toml");
+        let result = Config::load_from_sources(
+            missing,
+            [],
+            [("APPRISE_MAX_RESPONSE_BYTES".into(), usize::MAX.to_string())],
+            [],
+        );
+        assert!(
+            matches!(result, Err(ConfigError::InvalidValue { key, .. }) if key == "APPRISE_MAX_RESPONSE_BYTES")
+        );
     }
 
     #[cfg(unix)]

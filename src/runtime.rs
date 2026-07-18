@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -18,9 +20,11 @@ pub enum RuntimeError {
         #[source]
         source: std::io::Error,
     },
-    #[error("APPRISE_MCP_NO_AUTH is only allowed when every address for {host:?} is loopback")]
+    #[error("MCP bind host {host:?} resolved to no addresses")]
+    NoResolvedAddress { host: String },
+    #[error("APPRISE_MCP_NO_AUTH is only allowed when the selected bind address for {host:?} is loopback")]
     UnsafeNoAuth { host: String },
-    #[error("APPRISE_MCP_TOKEN is required for a non-loopback bearer-authenticated bind")]
+    #[error("APPRISE_MCP_TOKEN is required for bearer authentication")]
     MissingBearerToken,
     #[error("failed to build OAuth configuration: {0}")]
     OAuthConfig(#[source] lab_auth::error::AuthError),
@@ -34,9 +38,14 @@ pub enum RuntimeError {
     },
 }
 
-pub async fn build_state(config: Config) -> Result<AppState, RuntimeError> {
-    let is_loopback = host_is_loopback(&config.mcp.host, config.mcp.port).await?;
-    if config.mcp.no_auth && !is_loopback {
+pub struct PreparedRuntime {
+    pub state: AppState,
+    pub bind_addrs: Vec<SocketAddr>,
+}
+
+pub async fn build_state(config: Config) -> Result<PreparedRuntime, RuntimeError> {
+    let bind_addrs = resolve_bind_addrs(&config.mcp.host, config.mcp.port).await?;
+    if config.mcp.no_auth && !bind_addrs.iter().all(|address| address.ip().is_loopback()) {
         return Err(RuntimeError::UnsafeNoAuth {
             host: config.mcp.host.clone(),
         });
@@ -45,7 +54,7 @@ pub async fn build_state(config: Config) -> Result<AppState, RuntimeError> {
     let client = AppriseClient::new(&config.apprise)?;
     let service =
         AppriseService::new(client, config.apprise.url.clone()).with_config(config.mcp.clone());
-    let auth_policy = if is_loopback {
+    let auth_policy = if config.mcp.no_auth {
         AuthPolicy::LoopbackDev
     } else if config.mcp.auth.mode == AuthMode::OAuth {
         AuthPolicy::Mounted {
@@ -60,16 +69,19 @@ pub async fn build_state(config: Config) -> Result<AppState, RuntimeError> {
 
     let counters = service.counters.clone();
     let clock = service.clock.clone();
-    Ok(AppState {
-        config: config.mcp,
-        auth_policy,
-        service,
-        counters,
-        clock,
+    Ok(PreparedRuntime {
+        state: AppState {
+            config: config.mcp,
+            auth_policy,
+            service,
+            counters,
+            clock,
+        },
+        bind_addrs,
     })
 }
 
-pub async fn host_is_loopback(host: &str, port: u16) -> Result<bool, RuntimeError> {
+pub async fn resolve_bind_addrs(host: &str, port: u16) -> Result<Vec<SocketAddr>, RuntimeError> {
     let addresses = tokio::net::lookup_host((host, port))
         .await
         .map_err(|source| RuntimeError::Resolve {
@@ -77,7 +89,10 @@ pub async fn host_is_loopback(host: &str, port: u16) -> Result<bool, RuntimeErro
             source,
         })?
         .collect::<Vec<_>>();
-    Ok(!addresses.is_empty() && addresses.iter().all(|address| address.ip().is_loopback()))
+    if addresses.is_empty() {
+        return Err(RuntimeError::NoResolvedAddress { host: host.into() });
+    }
+    Ok(addresses)
 }
 
 pub async fn build_oauth_state(
@@ -151,11 +166,25 @@ pub async fn build_oauth_state(
     let state = lab_auth::state::AuthState::new(auth_config)
         .await
         .map_err(RuntimeError::OAuthState)?;
+    let configured = auth
+        .allowed_emails
+        .iter()
+        .map(|email| email.to_lowercase())
+        .collect::<HashSet<_>>();
+    let existing = state
+        .store
+        .list_allowed_users()
+        .await
+        .map_err(RuntimeError::OAuthState)?;
+    let existing_emails = existing
+        .iter()
+        .map(|row| row.email.clone())
+        .collect::<HashSet<_>>();
     let created_at = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs() as i64;
-    for email in &auth.allowed_emails {
+    for email in configured.difference(&existing_emails) {
         state
             .store
             .add_allowed_user(email, "config", created_at)
@@ -164,6 +193,15 @@ pub async fn build_oauth_state(
                 email: email.clone(),
                 source,
             })?;
+    }
+    for row in existing {
+        if row.added_by == "config" && !configured.contains(&row.email) {
+            state
+                .store
+                .remove_allowed_user(&row.email)
+                .await
+                .map_err(RuntimeError::OAuthState)?;
+        }
     }
     Ok(state)
 }
@@ -185,10 +223,16 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn loopback_resolution_is_semantic() {
-        assert!(host_is_loopback("localhost", 40050).await.unwrap());
-        assert!(host_is_loopback("127.0.0.1", 40050).await.unwrap());
-        assert!(!host_is_loopback("0.0.0.0", 40050).await.unwrap());
+    async fn bind_resolution_returns_the_address_that_will_be_bound() {
+        assert!(resolve_bind_addrs("localhost", 40050)
+            .await
+            .unwrap()
+            .iter()
+            .all(|address| address.ip().is_loopback()));
+        assert_eq!(
+            resolve_bind_addrs("0.0.0.0", 40050).await.unwrap(),
+            vec!["0.0.0.0:40050".parse().unwrap()]
+        );
     }
 
     #[tokio::test]
@@ -199,6 +243,44 @@ mod tests {
         assert!(matches!(
             build_state(config).await,
             Err(RuntimeError::UnsafeNoAuth { .. })
+        ));
+    }
+
+    #[tokio::test]
+    async fn loopback_bearer_auth_remains_mounted() {
+        let mut config = Config::default();
+        config.mcp.host = "127.0.0.1".into();
+        config.mcp.api_token = Some("secret".into());
+        let prepared = build_state(config).await.unwrap();
+        assert!(matches!(
+            prepared.state.auth_policy,
+            AuthPolicy::Mounted { auth_state: None }
+        ));
+        assert_eq!(
+            prepared.bind_addrs,
+            vec!["127.0.0.1:40050".parse().unwrap()]
+        );
+    }
+
+    #[tokio::test]
+    async fn loopback_oauth_remains_mounted() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut config = Config::default();
+        config.mcp.host = "127.0.0.1".into();
+        config.mcp.auth.mode = AuthMode::OAuth;
+        config.mcp.auth.public_url = Some("https://apprise.example.test".into());
+        config.mcp.auth.google_client_id = Some("client".into());
+        config.mcp.auth.google_client_secret = Some("secret".into());
+        config.mcp.auth.admin_email = "admin@example.test".into();
+        config.mcp.auth.sqlite_path = directory.path().join("auth.db").display().to_string();
+        config.mcp.auth.key_path = directory.path().join("auth.pem").display().to_string();
+
+        let prepared = build_state(config).await.unwrap();
+        assert!(matches!(
+            prepared.state.auth_policy,
+            AuthPolicy::Mounted {
+                auth_state: Some(_)
+            }
         ));
     }
 
@@ -227,5 +309,39 @@ mod tests {
         assert!(state.config.disable_static_token_with_oauth);
         let allowed = state.resolve_allowed_emails().await.unwrap();
         assert!(allowed.iter().any(|email| email == "operator@example.test"));
+    }
+
+    #[tokio::test]
+    async fn configured_allowlist_removals_are_reconciled_without_removing_admin_rows() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut config = Config::default();
+        let auth = &mut config.mcp.auth;
+        auth.mode = AuthMode::OAuth;
+        auth.public_url = Some("https://apprise.example.test".into());
+        auth.google_client_id = Some("client".into());
+        auth.google_client_secret = Some("secret".into());
+        auth.admin_email = "admin@example.test".into();
+        auth.allowed_emails = vec!["old@example.test".into()];
+        auth.sqlite_path = directory.path().join("auth.db").display().to_string();
+        auth.key_path = directory.path().join("auth.pem").display().to_string();
+
+        let initial = build_oauth_state(&config).await.unwrap();
+        initial
+            .store
+            .add_allowed_user("manual@example.test", "admin", 1)
+            .await
+            .unwrap();
+        drop(initial);
+
+        config.mcp.auth.allowed_emails = vec!["new@example.test".into()];
+        let reconciled = build_oauth_state(&config).await.unwrap();
+        let rows = reconciled.store.list_allowed_users().await.unwrap();
+        assert!(!rows.iter().any(|row| row.email == "old@example.test"));
+        assert!(rows
+            .iter()
+            .any(|row| { row.email == "new@example.test" && row.added_by == "config" }));
+        assert!(rows
+            .iter()
+            .any(|row| { row.email == "manual@example.test" && row.added_by == "admin" }));
     }
 }

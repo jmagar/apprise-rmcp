@@ -504,26 +504,33 @@ fn write_setup_env(data_dir: &Path, config: &Config) -> Result<()> {
             env_path.display()
         );
     }
-    let temporary = data_dir.join(format!(".env.tmp.{}", std::process::id()));
-    let mut options = std::fs::OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    let mut file = options.open(&temporary)?;
-    use std::io::Write;
-    file.write_all(format!("{}\n", lines.join("\n")).as_bytes())?;
-    file.sync_all()?;
-    std::fs::rename(&temporary, &env_path).inspect_err(|_| {
-        let _ = std::fs::remove_file(&temporary);
-    })?;
+    replace_file_atomically(
+        data_dir,
+        &env_path,
+        format!("{}\n", lines.join("\n")).as_bytes(),
+    )?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&env_path, std::fs::Permissions::from_mode(0o600))?;
     }
+    Ok(())
+}
+
+fn replace_file_atomically(directory: &Path, destination: &Path, contents: &[u8]) -> Result<()> {
+    use std::io::Write;
+
+    let mut temporary = tempfile::Builder::new()
+        .prefix(".env.tmp.")
+        .tempfile_in(directory)?;
+    temporary.write_all(contents)?;
+    temporary.as_file().sync_all()?;
+    temporary
+        .persist(destination)
+        .map_err(|error| error.error)?;
+
+    #[cfg(unix)]
+    std::fs::File::open(directory)?.sync_all()?;
     Ok(())
 }
 
@@ -991,4 +998,20 @@ fn dir_size_mb(path: &std::path::Path) -> Option<f64> {
         }
     }
     Some(total as f64 / (1024.0 * 1024.0))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn atomic_replace_overwrites_an_existing_destination() {
+        let directory = tempfile::tempdir().unwrap();
+        let destination = directory.path().join(".env");
+        std::fs::write(&destination, "old").unwrap();
+
+        replace_file_atomically(directory.path(), &destination, b"new").unwrap();
+
+        assert_eq!(std::fs::read(&destination).unwrap(), b"new");
+    }
 }

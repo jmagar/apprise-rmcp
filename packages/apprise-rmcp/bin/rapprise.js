@@ -20,13 +20,22 @@ if (!fs.existsSync(binary)) {
 
 const child = spawn(binary, process.argv.slice(2), { stdio: "inherit" });
 const forwarded = ["SIGINT", "SIGTERM", "SIGHUP"];
+const signalHandlers = new Map();
 for (const signal of forwarded) {
-  process.on(signal, () => {
+  const handler = () => {
     if (!child.killed) child.kill(signal);
-  });
+  };
+  signalHandlers.set(signal, handler);
+  process.on(signal, handler);
 }
 child.on("error", (error) => fail(error.message));
 child.on("exit", (code, signal) => {
-  if (signal) process.kill(process.pid, signal);
-  else process.exit(code ?? 1);
+  for (const [forwardedSignal, handler] of signalHandlers) {
+    process.removeListener(forwardedSignal, handler);
+  }
+  if (signal) {
+    process.kill(process.pid, signal);
+    return;
+  }
+  process.exit(code ?? 1);
 });

@@ -33,14 +33,17 @@ pub fn router(state: AppState) -> Router {
         AuthPolicy::LoopbackDev => None,
     };
 
-    let authenticated = if let Some(layer) = build_auth_layer(
+    let auth_layer = build_auth_layer(
         &state.auth_policy,
         state.config.api_token.as_deref().map(Arc::<str>::from),
         resource_url,
-    ) {
-        mcp_service.layer(layer)
-    } else {
-        mcp_service
+    );
+    let operational = Router::new()
+        .route("/ready", get(readiness))
+        .route("/status", get(status));
+    let (authenticated, protected_operational) = match auth_layer {
+        Some(layer) => (mcp_service.layer(layer.clone()), operational.layer(layer)),
+        None => (mcp_service, operational),
     };
 
     let oauth_router: Option<Router> = if let AuthPolicy::Mounted {
@@ -69,9 +72,8 @@ pub fn router(state: AppState) -> Router {
 
     let base: Router<()> = Router::new()
         .merge(authenticated)
+        .merge(protected_operational)
         .route("/health", get(health))
-        .route("/ready", get(readiness))
-        .route("/status", get(status))
         .with_state(state.clone());
 
     let combined = match oauth_router {

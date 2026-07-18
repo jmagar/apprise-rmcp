@@ -51,18 +51,18 @@ jobs:
       - run: cargo nextest run --workspace --all-features --profile ci
 
   msrv:
-    name: MSRV 1.86
+    name: MSRV 1.90
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
         with:
-          toolchain: "1.86.0"
+          toolchain: "1.90.0"
       - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
         with:
-          key: msrv-1.86
-      - run: cargo +1.86.0 check --workspace --all-targets --locked
+          key: msrv-1.90
+      - run: cargo +1.90.0 check --workspace --all-targets --locked
 
   toml:
     name: TOML format
@@ -83,8 +83,10 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: taiki-e/install-action@6d9ce389421e24f7b73aff5e841bbe5a6b4c974c # nextest
         with:
-          tool: cargo-audit@0.21.2
-      - run: cargo audit --deny warnings
+          tool: cargo-audit@0.22.2
+      # Vulnerabilities are always fatal; deny unsound advisories explicitly.
+      # The locked graph currently carries a tracked yanked-only spin warning.
+      - run: cargo audit --deny unsound
 
   gitleaks:
     name: Secret scan
@@ -112,6 +114,7 @@ jobs:
       - run: npm run check --prefix packages/apprise-rmcp
       - run: npm pack --dry-run --json ./packages/apprise-rmcp
       - run: bash scripts/test-install.sh
+      - run: bash scripts/test-bootstrap.sh
 
   policy:
     name: Supply-chain and packaging policy
@@ -122,6 +125,8 @@ jobs:
       - run: bash scripts/check-ci-policy.sh
       - run: bash scripts/check-version-sync.sh
       - run: bash scripts/validate-plugin-layout.sh
+      - run: bash tests/docs-contract.sh
+      - run: bash tests/rollout-container.sh
       - run: shellcheck install.sh entrypoint.sh scripts/*.sh
       - name: Validate Compose expansion
         env:

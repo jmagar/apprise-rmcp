@@ -11,7 +11,10 @@ npx -y apprise-rmcp mcp
 The package downloads the matching `rapprise` release archive during
 `postinstall`, fetches its published `.sha256`, rejects malformed or mismatched
 digests, validates the single-file archive layout, and atomically installs the
-binary. Release archives also carry GitHub build-provenance attestations.
+binary. It also verifies the offline GitHub build-provenance bundle against the
+release repository, workflow, and tag; GitHub CLI 2.68+ is required.
+On Windows x86_64, `gh.exe` must be installed and available on `PATH` during
+`postinstall`; installation fails closed when provenance cannot be verified.
 
 The npm package, Rust binary, MCP registry metadata, and GitHub release use one
 coupled version. A package at `0.1.3` downloads binary release `v0.1.3` unless an

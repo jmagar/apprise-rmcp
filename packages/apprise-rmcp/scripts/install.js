@@ -18,6 +18,28 @@ function log(message) {
   process.stderr.write(`apprise-rmcp: ${message}\n`);
 }
 
+function parseControl(value, fallback, name, { minimum }) {
+  if (value === undefined || value === "") return fallback;
+  const parsed = Number(value);
+  const label = minimum === 0 ? "non-negative integer" : "positive integer";
+  if (!Number.isSafeInteger(parsed) || parsed < minimum) {
+    throw new Error(`${name} must be a ${label}`);
+  }
+  return parsed;
+}
+
+function resolveRedirect(currentUrl, location) {
+  const current = new URL(currentUrl);
+  const next = new URL(location, current);
+  if (current.protocol === "https:" && next.protocol !== "https:") {
+    throw new Error(`refusing HTTPS downgrade redirect to ${next.protocol}`);
+  }
+  if (!["https:", "http:"].includes(next.protocol)) {
+    throw new Error(`unsupported download protocol ${next.protocol}`);
+  }
+  return next.toString();
+}
+
 function download(url, destination, options = {}) {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const connectTimeoutMs = options.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS;
@@ -61,7 +83,13 @@ function download(url, destination, options = {}) {
           finish(new Error("download redirect omitted Location header"));
           return;
         }
-        const next = new URL(response.headers.location, parsed).toString();
+        let next;
+        try {
+          next = resolveRedirect(parsed.toString(), response.headers.location);
+        } catch (error) {
+          finish(error);
+          return;
+        }
         settled = true;
         clearTimeout(totalTimer);
         download(next, destination, { timeoutMs, connectTimeoutMs, maxRedirects, startedAt, redirects: redirects + 1 }).then(resolve, reject);
@@ -124,6 +152,30 @@ function atomicInstall(source, destination) {
   }
 }
 
+function verifyAttestation(archive, bundle, repo, version, runner = spawnSync) {
+  const result = runner("gh", [
+    "attestation", "verify", archive,
+    "--repo", repo,
+    "--bundle", bundle,
+    "--signer-workflow", `${repo}/.github/workflows/release.yml`,
+    "--source-ref", `refs/tags/${version}`,
+    "--deny-self-hosted-runners",
+  ], { stdio: "inherit" });
+  if (result.error || result.status !== 0) {
+    throw new Error("release provenance verification failed; install GitHub CLI 2.68+ and retry");
+  }
+}
+
+function requireGhVersion(runner = spawnSync) {
+  const result = runner("gh", ["--version"], { encoding: "utf8" });
+  const match = result.stdout?.match(/^gh version (\d+)\.(\d+)\./u);
+  const major = Number(match?.[1]);
+  const minor = Number(match?.[2]);
+  if (result.error || result.status !== 0 || !match || major < 2 || (major === 2 && minor < 68)) {
+    throw new Error("GitHub CLI 2.68+ is required for provenance verification");
+  }
+}
+
 async function main() {
   if (process.env.APPRISE_RMCP_SKIP_DOWNLOAD === "1") {
     log("skipping binary download because APPRISE_RMCP_SKIP_DOWNLOAD=1");
@@ -135,20 +187,25 @@ async function main() {
     log(`${path.basename(destination)} already installed for ${releaseVersion()}`);
     return;
   }
+  requireGhVersion();
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "apprise-rmcp-install-"));
   const archive = path.join(tempDir, target.asset);
   const checksum = `${archive}.sha256`;
+  const bundle = `${archive}.sigstore.json`;
   try {
     const url = downloadUrl(target);
     log(`downloading ${url}`);
     const options = {
-      timeoutMs: Number(process.env.APPRISE_RMCP_DOWNLOAD_TIMEOUT_MS || DEFAULT_TIMEOUT_MS),
-      connectTimeoutMs: Number(process.env.APPRISE_RMCP_CONNECT_TIMEOUT_MS || DEFAULT_CONNECT_TIMEOUT_MS),
-      maxRedirects: Number(process.env.APPRISE_RMCP_MAX_REDIRECTS || DEFAULT_MAX_REDIRECTS),
+      timeoutMs: parseControl(process.env.APPRISE_RMCP_DOWNLOAD_TIMEOUT_MS, DEFAULT_TIMEOUT_MS, "APPRISE_RMCP_DOWNLOAD_TIMEOUT_MS", { minimum: 1 }),
+      connectTimeoutMs: parseControl(process.env.APPRISE_RMCP_CONNECT_TIMEOUT_MS, DEFAULT_CONNECT_TIMEOUT_MS, "APPRISE_RMCP_CONNECT_TIMEOUT_MS", { minimum: 1 }),
+      maxRedirects: parseControl(process.env.APPRISE_RMCP_MAX_REDIRECTS, DEFAULT_MAX_REDIRECTS, "APPRISE_RMCP_MAX_REDIRECTS", { minimum: 0 }),
     };
     await download(url, archive, options);
     await download(`${url}.sha256`, checksum, options);
+    await download(`${url}.sigstore.json`, bundle, options);
     verifyChecksum(archive, checksum);
+    const repo = process.env.APPRISE_RMCP_REPO || "jmagar/apprise-rmcp";
+    verifyAttestation(archive, bundle, repo, releaseVersion());
     const staged = extractBinary(archive, path.join(tempDir, "staged"), target.binary);
     atomicInstall(staged, destination);
     log(`installed ${destination}`);
@@ -157,7 +214,18 @@ async function main() {
   }
 }
 
-module.exports = { atomicInstall, download, extractBinary, main, sha256, verifyChecksum };
+module.exports = {
+  atomicInstall,
+  download,
+  extractBinary,
+  main,
+  parseControl,
+  requireGhVersion,
+  resolveRedirect,
+  sha256,
+  verifyAttestation,
+  verifyChecksum,
+};
 
 if (require.main === module) {
   main().catch((error) => {

@@ -9,19 +9,23 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilte
 use self::console::AuroraFormatter;
 use self::file::{RollingFileWriter, MAX_LOG_BYTES};
 
+const LOG_BUFFERED_LINES: usize = 8_192;
+
 /// Initialise dual logging: pretty aurora console (stderr) + JSON file.
 ///
 /// Log file location: `{data_dir}/logs/apprise.log`
-pub fn init(data_dir: &Path, default_level: &str) -> anyhow::Result<()> {
+pub fn init(
+    data_dir: &Path,
+    default_level: &str,
+) -> anyhow::Result<tracing_appender::non_blocking::WorkerGuard> {
     std::fs::create_dir_all(data_dir)?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(data_dir, std::fs::Permissions::from_mode(0o700))?;
     }
-    let log_path = data_dir.join("logs").join("apprise.log");
     let colorize = should_colorize();
-    let file_writer = RollingFileWriter::open(log_path, MAX_LOG_BYTES)?;
+    let (file_writer, guard) = non_blocking_file_writer(data_dir)?;
 
     let filter =
         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(default_level));
@@ -44,7 +48,24 @@ pub fn init(data_dir: &Path, default_level: &str) -> anyhow::Result<()> {
         )
         .init();
 
-    Ok(())
+    Ok(guard)
+}
+
+fn non_blocking_file_writer(
+    data_dir: &Path,
+) -> anyhow::Result<(
+    tracing_appender::non_blocking::NonBlocking,
+    tracing_appender::non_blocking::WorkerGuard,
+)> {
+    let log_path = data_dir.join("logs").join("apprise.log");
+    let file_writer = RollingFileWriter::open(log_path, MAX_LOG_BYTES)?;
+    Ok(
+        tracing_appender::non_blocking::NonBlockingBuilder::default()
+            .buffered_lines_limit(LOG_BUFFERED_LINES)
+            .lossy(true)
+            .thread_name("apprise-log-writer")
+            .finish(file_writer),
+    )
 }
 
 /// Initialise console-only logging (no file). Used in stdio/CLI modes where a
@@ -79,4 +100,19 @@ fn should_colorize() -> bool {
         return true;
     }
     std::io::stderr().is_terminal()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn file_writer_is_wrapped_in_a_guarded_non_blocking_worker() {
+        let directory = tempfile::tempdir().unwrap();
+        let (_writer, guard): (
+            tracing_appender::non_blocking::NonBlocking,
+            tracing_appender::non_blocking::WorkerGuard,
+        ) = non_blocking_file_writer(directory.path()).unwrap();
+        drop(guard);
+    }
 }
