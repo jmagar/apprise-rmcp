@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.2.0](https://github.com/jmagar/apprise-rmcp/compare/v0.1.3...v0.2.0) (2026-07-18)
+
+
+### Added
+
+* align apprise npm launcher naming ([9f28c5c](https://github.com/jmagar/apprise-rmcp/commit/9f28c5c0c75f2b6268132105103526d8d0b58cca))
+
+
+### Fixed
+
+* **ci:** allow multi-arch publication to finish ([fb73923](https://github.com/jmagar/apprise-rmcp/commit/fb739236923b80510d1b0de807a6d25f25e31c6a))
+* **ci:** correct Docker QEMU action pin ([d0b38c5](https://github.com/jmagar/apprise-rmcp/commit/d0b38c53553427d6bf36979e20115174802eeecb))
+* **ci:** switch OpenWiki to local openai-compatible proxy ([65fd327](https://github.com/jmagar/apprise-rmcp/commit/65fd32746f60c57896380a43e7cdbe8dbe0e35a3))
+* remediate comprehensive repository review ([#5](https://github.com/jmagar/apprise-rmcp/issues/5)) ([a8f31ef](https://github.com/jmagar/apprise-rmcp/commit/a8f31efa65309e671b6e7d521f4d6ab52e33d6eb))
+* route rust builds through sccache wrapper ([f34fcd1](https://github.com/jmagar/apprise-rmcp/commit/f34fcd1fb6810ee83f3511b740affc6078fd7c0b))
+* **security:** update cmov for AArch64 correctness ([f3adde2](https://github.com/jmagar/apprise-rmcp/commit/f3adde2af113491f1e46576ec5153f60fa681f6d))
+
 ## [Unreleased]
 
 ### Changed
