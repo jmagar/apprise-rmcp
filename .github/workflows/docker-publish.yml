@@ -41,7 +41,7 @@ jobs:
         run: |
           git fetch origin main
           git merge-base --is-ancestor HEAD origin/main
-      - uses: docker/setup-qemu-action@68827325e0b33c7199a2f1f42f6c1b492d7a4f5c # v3
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
       - id: release
         name: Resolve immutable and channel tags
