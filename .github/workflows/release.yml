@@ -6,46 +6,55 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: "Existing release tag to attach assets to, e.g. v0.1.1"
+        description: "Existing immutable release tag, for example v0.1.3"
         required: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   release-meta:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       tag_name: ${{ steps.meta.outputs.tag_name }}
-      release_name: ${{ steps.meta.outputs.release_name }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
       - id: meta
-        name: Resolve release tag
-        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_TAG: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ inputs.tag_name }}
         run: |
           set -euo pipefail
-          if [[ "${{ github.event_name }}" == "release" ]]; then
-            tag="${{ github.event.release.tag_name }}"
-            release_name="${{ github.event.release.name }}"
-          else
-            tag="${{ inputs.tag_name }}"
-            if [[ -z "$tag" ]]; then
-              echo "::error::tag_name is required for manual releases"
-              exit 1
-            fi
-            release_name="apprise-rmcp ${tag}"
-          fi
-          echo "tag_name=${tag}" >> "$GITHUB_OUTPUT"
-          echo "release_name=${release_name}" >> "$GITHUB_OUTPUT"
+          [[ "$EVENT_NAME" == release ]] && tag="$EVENT_TAG" || tag="$INPUT_TAG"
+          [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]] || { echo "::error::invalid release tag: $tag"; exit 1; }
+          echo "tag_name=$tag" >> "$GITHUB_OUTPUT"
+
+  preflight:
+    needs: release-meta
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ needs.release-meta.outputs.tag_name }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require tag commit on main
+        run: |
+          git fetch origin main
+          git merge-base --is-ancestor HEAD origin/main
+      - name: Validate every release version before publication
+        env:
+          EXPECTED_VERSION: ${{ needs.release-meta.outputs.tag_name }}
+        run: bash scripts/check-version-sync.sh
+      - run: bash scripts/check-ci-policy.sh
+      - run: npm test --prefix packages/apprise-rmcp
 
   build:
-    needs: release-meta
+    needs: [release-meta, preflight]
     permissions:
-      contents: write
+      contents: read
       id-token: write
       attestations: write
     strategy:
@@ -61,144 +70,101 @@ jobs:
             archive: rapprise-windows-x86_64.tar.gz
             ext: ".exe"
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           ref: ${{ needs.release-meta.outputs.tag_name }}
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
         with:
           targets: ${{ matrix.target }}
-
-      - name: Install cross toolchain
-        if: matrix.target == 'x86_64-pc-windows-msvc'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y nasm llvm clang lld
-          cargo install cargo-xwin --locked
-
-      - name: Build web assets
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ -f apps/web/package.json ]]; then
-            cd apps/web
-            npm install -g "$(node -p "require('./package.json').packageManager")"
-            pnpm install --frozen-lockfile
-            pnpm build
-          fi
-
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
         with:
           key: ${{ matrix.target }}
-
-      - name: Build (linux)
+      - uses: taiki-e/install-action@6d9ce389421e24f7b73aff5e841bbe5a6b4c974c # nextest
+        if: matrix.target == 'x86_64-pc-windows-msvc'
+        with:
+          tool: cargo-xwin@0.20.2
+      - name: Build Linux
         if: matrix.target == 'x86_64-unknown-linux-gnu'
         run: cargo build --release --locked --target ${{ matrix.target }} --bin rapprise
-
-      - name: Build (windows cross)
+      - name: Build Windows
         if: matrix.target == 'x86_64-pc-windows-msvc'
         run: cargo xwin build --release --locked --target ${{ matrix.target }} --bin rapprise
-
-      - name: Stage artifact + checksum
+      - name: Stage archive and published digest
         run: |
+          set -euo pipefail
           cp "target/${{ matrix.target }}/release/rapprise${{ matrix.ext }}" "${{ matrix.artifact }}"
-          sha256sum "${{ matrix.artifact }}" > "${{ matrix.artifact }}.sha256"
-          mkdir -p archive
+          mkdir archive
           cp "${{ matrix.artifact }}" "archive/rapprise${{ matrix.ext }}"
           tar -C archive -czf "${{ matrix.archive }}" "rapprise${{ matrix.ext }}"
           sha256sum "${{ matrix.archive }}" > "${{ matrix.archive }}.sha256"
-
-      - name: Attest build provenance
-        uses: actions/attest-build-provenance@v3
+      - name: Attest the exact archive consumed by installers
+        uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
         with:
-          subject-path: ${{ matrix.artifact }}
-
-      - name: Upload as workflow artifact
-        uses: actions/upload-artifact@v4
+          subject-path: ${{ matrix.archive }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ${{ matrix.artifact }}
+          name: ${{ matrix.archive }}
           path: |
-            ${{ matrix.artifact }}
-            ${{ matrix.artifact }}.sha256
             ${{ matrix.archive }}
             ${{ matrix.archive }}.sha256
 
   publish-release:
-    needs: [release-meta, build]
+    needs: [release-meta, preflight, build]
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
     steps:
-      - name: Download release assets
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: dist/release-assets
           merge-multiple: true
-
-      - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: Verify and aggregate release checksums
+        working-directory: dist/release-assets
+        run: |
+          set -euo pipefail
+          for checksum in ./*.sha256; do sha256sum --check "$checksum"; done
+          cat -- ./*.sha256 | sort -k2 > SHA256SUMS
+      - name: Attach verified release assets
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: ${{ needs.release-meta.outputs.tag_name }}
-          name: ${{ needs.release-meta.outputs.release_name }}
-          target_commitish: ${{ github.sha }}
           files: dist/release-assets/*
 
   npm:
-    needs: [release-meta, publish-release]
+    needs: [release-meta, preflight, publish-release]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: npm
     permissions:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           ref: ${{ needs.release-meta.outputs.tag_name }}
-      - uses: actions/setup-node@v4
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
-
-      - name: Verify npm package version matches release tag
-        id: npm-version
-        shell: bash
-        run: |
-          set -euo pipefail
-          tag="${{ needs.release-meta.outputs.tag_name }}"
-          version="$(node -p "require('./packages/apprise-rmcp/package.json').version")"
-          if [[ "$tag" != "v${version}" ]]; then
-            echo "::error::release tag ${tag} does not match packages/apprise-rmcp/package.json version ${version}"
-            exit 1
-          fi
-          echo "version=${version}" >> "$GITHUB_OUTPUT"
-
-      - name: Test npm launcher
-        run: npm test --prefix packages/apprise-rmcp
-      - name: Check npm launcher syntax
-        run: npm run check --prefix packages/apprise-rmcp
-      - name: Dry-run npm package
-        run: npm pack --dry-run --json ./packages/apprise-rmcp
-
-      - name: Check whether npm version is already published
-        id: published
-        shell: bash
-        run: |
-          set -euo pipefail
-          if npm view "apprise-rmcp@${{ steps.npm-version.outputs.version }}" version >/dev/null 2>&1; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Publish npm package
-        if: steps.published.outputs.exists == 'false'
+      - run: npm install --global npm@11.5.2 --ignore-scripts
+      - run: npm test --prefix packages/apprise-rmcp
+      - run: npm run check --prefix packages/apprise-rmcp
+      - run: npm pack --dry-run --json ./packages/apprise-rmcp
+      - id: published
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --provenance --access public ./packages/apprise-rmcp
-
-      - name: Smoke published npm launcher
-        shell: bash
+          VERSION: ${{ needs.release-meta.outputs.tag_name }}
         run: |
-          set -euo pipefail
-          cache="$(mktemp -d)"
-          trap 'rm -rf "$cache"' EXIT
-          npm_config_cache="$cache" npx -y "apprise-rmcp@${{ steps.npm-version.outputs.version }}" --version
+          version="${VERSION#v}"
+          if npm view "apprise-rmcp@${version}" version >/dev/null 2>&1; then echo exists=true >> "$GITHUB_OUTPUT"; else echo exists=false >> "$GITHUB_OUTPUT"; fi
+      - name: Publish using npm trusted publishing
+        if: steps.published.outputs.exists == 'false'
+        run: npm publish --provenance --access public ./packages/apprise-rmcp
+      - name: Smoke published launcher
+        env:
+          VERSION: ${{ needs.release-meta.outputs.tag_name }}
+        run: npm_config_cache="$(mktemp -d)" npx -y "apprise-rmcp@${VERSION#v}" --version

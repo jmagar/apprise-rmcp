@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use axum::{
+    extract::State,
     http::{HeaderValue, Method, StatusCode},
     response::{IntoResponse, Json},
     routing::get,
@@ -69,6 +70,8 @@ pub fn router(state: AppState) -> Router {
     let base: Router<()> = Router::new()
         .merge(authenticated)
         .route("/health", get(health))
+        .route("/ready", get(readiness))
+        .route("/status", get(status))
         .with_state(state.clone());
 
     let combined = match oauth_router {
@@ -95,4 +98,25 @@ fn cors_layer(config: &crate::config::McpConfig) -> CorsLayer {
 
 async fn health() -> impl IntoResponse {
     Json(json!({ "status": "ok" }))
+}
+
+async fn readiness(State(state): State<AppState>) -> impl IntoResponse {
+    match tokio::time::timeout(std::time::Duration::from_secs(5), state.service.health()).await {
+        Ok(Ok(_)) => (StatusCode::OK, Json(json!({ "status": "ready" }))),
+        Ok(Err(error)) => {
+            tracing::warn!(%error, "readiness probe failed");
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({ "status": "not_ready", "reason": "upstream_unavailable" })),
+            )
+        }
+        Err(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({ "status": "not_ready", "reason": "upstream_timeout" })),
+        ),
+    }
+}
+
+async fn status(State(state): State<AppState>) -> impl IntoResponse {
+    Json(state.service.status())
 }

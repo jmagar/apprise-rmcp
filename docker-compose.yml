@@ -1,6 +1,5 @@
 name: apprise-mcp
 
-# Local development stack. Builds from this checkout.
 services:
   apprise-mcp:
     extends:
@@ -15,4 +14,7 @@ services:
 networks:
   apprise-mcp:
     name: ${DOCKER_NETWORK:-apprise-mcp}
-    external: true
+
+volumes:
+  apprise-data:
+    name: ${APPRISE_DATA_VOLUME:-apprise-mcp-data}

@@ -1,77 +1,20 @@
 #!/usr/bin/env bash
-# install.sh — one-line install for apprise-rmcp binary
-# Usage: curl -fsSL https://raw.githubusercontent.com/jmagar/apprise-rmcp/main/install.sh | bash
+# Bootstrap the canonical installer from an immutable release tag.
 set -euo pipefail
 
-INSTALL_DIR="${HOME}/.local/bin"
-BINARY_NAME="rapprise"
-
-# ── Detect platform ───────────────────────────────────────────────────────────
-OS="$(uname -s)"
-ARCH="$(uname -m)"
-
-case "${OS}-${ARCH}" in
-  Linux-x86_64)  ASSET="apprise-x86_64-linux" ;;
-  Linux-aarch64) ASSET="apprise-aarch64-linux" ;;
-  Darwin-x86_64) ASSET="apprise-x86_64-macos" ;;
-  Darwin-arm64)  ASSET="apprise-aarch64-macos" ;;
-  *)
-    echo "ERROR: unsupported platform ${OS}-${ARCH}" >&2
-    echo "       Build from source: cargo install --path ." >&2
-    exit 1
-    ;;
-esac
-
-REPO="jmagar/apprise-rmcp"
-DOWNLOAD_URL="https://github.com/${REPO}/releases/latest/download/${ASSET}"
-
-# ── Install binary ────────────────────────────────────────────────────────────
-mkdir -p "${INSTALL_DIR}"
-
-echo "Downloading apprise-rmcp from ${DOWNLOAD_URL} ..."
-curl -fsSL --progress-bar "${DOWNLOAD_URL}" -o "${INSTALL_DIR}/${BINARY_NAME}"
-chmod +x "${INSTALL_DIR}/${BINARY_NAME}"
-
-echo "Installed: ${INSTALL_DIR}/${BINARY_NAME}"
-
-# Verify
-if "${INSTALL_DIR}/${BINARY_NAME}" --version >/dev/null 2>&1; then
-  echo "Version: $("${INSTALL_DIR}/${BINARY_NAME}" --version)"
+if [[ -x "$(dirname "${BASH_SOURCE[0]}")/scripts/install.sh" ]]; then
+  exec "$(dirname "${BASH_SOURCE[0]}")/scripts/install.sh" "$@"
 fi
 
-# ── Starter .env ──────────────────────────────────────────────────────────────
-if [[ ! -f ".env" ]]; then
-  if [[ -f ".env.example" ]]; then
-    cp .env.example .env
-    echo "Created .env from .env.example — edit it to set APPRISE_URL and APPRISE_MCP_TOKEN"
-  else
-    cat > .env << 'EOF'
-# Upstream Apprise API server URL (required)
-APPRISE_URL=http://localhost:8000
-
-# Static bearer token for the MCP HTTP server (generate: openssl rand -hex 32)
-APPRISE_MCP_TOKEN=
-
-# Optional Apprise API token
-APPRISE_TOKEN=
-
-RUST_LOG=info
-EOF
-    echo "Created starter .env — edit it to set APPRISE_URL and APPRISE_MCP_TOKEN"
-  fi
+version="${APPRISE_RMCP_VERSION:-}"
+repo="${APPRISE_RMCP_REPO:-jmagar/apprise-rmcp}"
+if [[ ! "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+  echo "error: APPRISE_RMCP_VERSION must be an explicit release tag such as v0.1.3" >&2
+  exit 1
 fi
-
-# ── PATH hint ─────────────────────────────────────────────────────────────────
-if ! command -v "${BINARY_NAME}" >/dev/null 2>&1; then
-  echo ""
-  echo "NOTE: ${INSTALL_DIR} is not in your PATH."
-  echo "      Add this to your shell profile:"
-  echo "        export PATH=\"\${HOME}/.local/bin:\${PATH}\""
-fi
-
-echo ""
-echo "Next steps:"
-echo "  1. Edit .env — set APPRISE_URL (your Apprise server) and APPRISE_MCP_TOKEN (shared secret)"
-echo "  2. Edit config.toml for non-secret settings (host, port, auth_mode)"
-echo "  3. Run: apprise serve mcp"
-echo "     Or:  docker compose up -d"
+temporary="$(mktemp)"
+trap 'rm -f "$temporary"' EXIT
+curl --fail --silent --show-error --location --connect-timeout 10 --max-time 30 --max-redirs 3 \
+  --proto '=https' --proto-redir '=https' \
+  "https://raw.githubusercontent.com/${repo}/${version}/scripts/install.sh" -o "$temporary"
+exec bash "$temporary" "$@"

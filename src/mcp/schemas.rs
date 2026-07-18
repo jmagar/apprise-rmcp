@@ -1,6 +1,6 @@
 use serde_json::{json, Value};
 
-pub(super) const APPRISE_ACTIONS: &[&str] = &["notify", "notify_url", "health", "help"];
+pub(super) const APPRISE_ACTIONS: &[&str] = &["notify", "notify_url", "health", "status", "help"];
 
 pub(super) fn tool_definitions() -> Vec<Value> {
     vec![json!({

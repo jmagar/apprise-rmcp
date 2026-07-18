@@ -4,6 +4,7 @@ pub mod config;
 pub mod logging;
 pub mod mcp;
 pub mod observability;
+pub mod runtime;
 pub mod token_limit;
 
 #[cfg(any(test, feature = "test-support"))]
@@ -23,6 +24,8 @@ pub mod testing {
         let client = AppriseClient::new(&AppriseConfig {
             url: "http://localhost:1".into(),
             token: String::new(),
+            max_concurrent_requests: 1,
+            max_response_bytes: 1024,
         })
         .expect("stub client should build");
         AppriseService::new(client, "http://localhost:1".into())

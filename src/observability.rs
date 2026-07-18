@@ -79,21 +79,3 @@ impl Default for ServerClock {
         Self::new()
     }
 }
-
-/// Probe the upstream Apprise health endpoint and report reachability.
-///
-/// Returns `(reachable, latency_ms)`. Never panics — errors are swallowed and
-/// reported as unreachable.
-pub async fn probe_upstream(client: &reqwest::Client, base_url: &str) -> (bool, u64) {
-    let url = format!("{}/health", base_url.trim_end_matches('/'));
-    let start = Instant::now();
-    match client
-        .get(&url)
-        .timeout(Duration::from_secs(5))
-        .send()
-        .await
-    {
-        Ok(resp) if resp.status().is_success() => (true, start.elapsed().as_millis() as u64),
-        _ => (false, start.elapsed().as_millis() as u64),
-    }
-}

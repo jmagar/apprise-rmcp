@@ -13,6 +13,12 @@ use self::file::{RollingFileWriter, MAX_LOG_BYTES};
 ///
 /// Log file location: `{data_dir}/logs/apprise.log`
 pub fn init(data_dir: &Path, default_level: &str) -> anyhow::Result<()> {
+    std::fs::create_dir_all(data_dir)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(data_dir, std::fs::Permissions::from_mode(0o700))?;
+    }
     let log_path = data_dir.join("logs").join("apprise.log");
     let colorize = should_colorize();
     let file_writer = RollingFileWriter::open(log_path, MAX_LOG_BYTES)?;

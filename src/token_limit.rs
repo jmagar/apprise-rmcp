@@ -10,7 +10,7 @@ pub fn truncate_response(text: &str) -> String {
     if text.len() <= MAX_RESPONSE_BYTES {
         return text.to_string();
     }
-    let truncated = &text[..MAX_RESPONSE_BYTES];
+    let truncated = utf8_prefix(text, MAX_RESPONSE_BYTES);
     format!(
         "{truncated}\n\n[TRUNCATED: response exceeded 40KB (10K token) limit. \
          Use more specific filters or pagination to narrow results.]"
@@ -25,7 +25,7 @@ pub fn truncate_body(body: &str) -> (String, Option<String>) {
     if body.len() <= MAX_BODY_BYTES {
         return (body.to_string(), None);
     }
-    let truncated = &body[..MAX_BODY_BYTES];
+    let truncated = utf8_prefix(body, MAX_BODY_BYTES);
     let warning = format!(
         "WARNING: notification body was truncated from {} bytes to {} bytes \
          (max allowed for a single notification).",
@@ -33,6 +33,14 @@ pub fn truncate_body(body: &str) -> (String, Option<String>) {
         MAX_BODY_BYTES
     );
     (truncated.to_string(), Some(warning))
+}
+
+fn utf8_prefix(value: &str, max_bytes: usize) -> &str {
+    let mut boundary = max_bytes.min(value.len());
+    while boundary > 0 && !value.is_char_boundary(boundary) {
+        boundary -= 1;
+    }
+    &value[..boundary]
 }
 
 #[cfg(test)]
@@ -66,5 +74,21 @@ mod tests {
         let (body, warn) = truncate_body(&s);
         assert_eq!(body.len(), MAX_BODY_BYTES);
         assert!(warn.is_some());
+    }
+
+    #[test]
+    fn response_truncation_is_unicode_safe() {
+        let value = format!("{}💥", "x".repeat(MAX_RESPONSE_BYTES - 1));
+        let result = truncate_response(&value);
+        assert!(result.contains("[TRUNCATED:"));
+        assert!(result.is_char_boundary(MAX_RESPONSE_BYTES - 1));
+    }
+
+    #[test]
+    fn body_truncation_is_unicode_safe() {
+        let value = format!("{}💥", "x".repeat(MAX_BODY_BYTES - 1));
+        let (result, warning) = truncate_body(&value);
+        assert_eq!(result.len(), MAX_BODY_BYTES - 1);
+        assert!(warning.is_some());
     }
 }

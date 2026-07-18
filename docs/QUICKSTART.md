@@ -1,97 +1,54 @@
-# Quickstart — apprise-mcp
+# apprise-rmcp quickstart
 
-Get up and running in 5 minutes.
-
-## Prerequisites
-
-- Rust 1.86+ (`rustup update stable`)
-- A running [Apprise API server](https://github.com/caronc/apprise-api)
-
-### Start Apprise API server (Docker)
+Prerequisites are an Apprise API server plus Rust 1.86+ for source builds or
+Node.js for the npm launcher. `APPRISE_URL` is optional and defaults to
+`http://localhost:8000`.
 
 ```bash
-docker run -d --name apprise -p 8766:8000 caronc/apprise:latest
-```
-
-The live homelab instance is already at `http://100.120.242.29:8766`.
-
-## Step 1 — Build the binary
-
-```bash
-cd /home/jmagar/workspace/apprise-mcp
+git clone https://github.com/jmagar/apprise-rmcp
+cd apprise-rmcp
 cargo build --release
-# Binary at: target/release/apprise
+./target/release/rapprise health --json
+./target/release/rapprise notify "Deploy complete" --tag ops --type success
 ```
 
-## Step 2 — Set environment
+For another upstream, set `APPRISE_URL`; set `APPRISE_TOKEN` only if it is
+protected.
 
-```bash
-export APPRISE_URL=http://100.120.242.29:8766
-# APPRISE_TOKEN=  (leave empty for open installs)
-```
-
-Or copy `.env.example` to `.env` and fill in values.
-
-## Step 3 — Health check
-
-```bash
-cargo run -- health
-# or after install:
-apprise health
-```
-
-Expected output:
-```
-status: OK
-```
-
-## Step 4 — Send a test notification
-
-```bash
-cargo run -- notify "Hello from apprise-mcp" --title "Test" --type info
-```
-
-## Step 5 — Use with Claude
-
-### stdio transport (simplest)
-
-Add to Claude Desktop config (`~/.config/claude/claude_desktop_config.json`):
+## Stdio MCP
 
 ```json
 {
   "mcpServers": {
     "apprise": {
-      "command": "/path/to/apprise",
-      "args": ["mcp"],
-      "env": {
-        "APPRISE_URL": "http://100.120.242.29:8766"
-      }
+      "command": "npx",
+      "args": ["-y", "apprise-rmcp", "mcp"],
+      "env": { "APPRISE_URL": "http://localhost:8000" }
     }
   }
 }
 ```
 
-### HTTP transport
+Stdio uses the local process boundary and ignores HTTP MCP auth settings.
+
+## HTTP MCP
 
 ```bash
-APPRISE_URL=http://100.120.242.29:8766 apprise serve
-# Listening on 0.0.0.0:40050
+APPRISE_MCP_HOST=127.0.0.1 APPRISE_MCP_NO_AUTH=true ./target/release/rapprise serve
+curl -sf http://127.0.0.1:40050/health
 ```
 
-Then point Claude at `http://localhost:40050/mcp`.
+Any non-loopback deployment requires bearer or OAuth auth and TLS. See the
+[auth table](INVENTORY.md#authentication-decision-table).
 
-## Configuring notification services in Apprise
+## Claude plugin
 
-Visit the Apprise web UI at your Apprise URL, or use the REST API:
+The plugin is bundled stdio, not a service deployer:
 
 ```bash
-# Add a Slack webhook under the "ops" tag
-curl -X POST http://100.120.242.29:8766/add/ops \
-  -H "Content-Type: application/json" \
-  -d '{"urls": "slack://your/webhook/url"}'
+just plugin-build
+claude plugin install ./plugins/apprise
 ```
 
-Then from Claude:
-```
-Use the apprise tool with action=notify, tag=ops, body="Deploy complete", type=success
-```
+Its hook runs bundled `rapprise setup plugin-hook`. Configure upstream values
+in process env or `${APPRISE_HOME:-~/.apprise}/.env`.

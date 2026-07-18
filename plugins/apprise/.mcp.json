@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "apprise": {
-      "command": "npx",
-      "args": ["-y", "apprise-rmcp", "mcp"]
+      "command": "${CLAUDE_PLUGIN_ROOT}/bin/rapprise",
+      "args": ["mcp"]
     }
   }
 }

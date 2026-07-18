@@ -59,9 +59,6 @@ pack_repo() {
   mkdir -p "$(dirname -- "$tf")"; mv -- "$tmp_file" "$tf"; rm -rf -- "$td"
 }
 write_index() {
-  local a=0 m=0
-  [[ -d "$REF_DIR/apprise/docs" ]] && a="$(find "$REF_DIR/apprise/docs" -type f|wc -l|tr -d ' ')"
-  [[ -d "$REF_DIR/mcp/docs"    ]] && m="$(find "$REF_DIR/mcp/docs"    -type f|wc -l|tr -d ' ')"
   cat > "$REF_DIR/INDEX.md" <<EOF
 # Reference Index — apprise-rmcp
 | Path | Contents | Source |
@@ -89,6 +86,7 @@ ensure_changes_file() {
 }
 append_changes_log() {
   ensure_changes_file
+  # shellcheck disable=SC2016 # Markdown backticks are intentional literal text.
   { printf '\n## %s\n\n- scope: `%s`\n- summary: `%s added, %s modified, %s removed`\n' \
       "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(refresh_scope)" "$4" "$5" "$6"; } >> "$CHANGES_FILE"
 }

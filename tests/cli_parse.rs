@@ -1,13 +1,5 @@
-// CLI parsing tests — no network required.
-
-fn parse(args: &[&str]) -> anyhow::Result<()> {
-    // We can't import cli::CliCommand directly (it lives in main.rs's mod cli).
-    // Instead we validate that the binary's arg shapes are exercised through
-    // the public config + service boundary.  The real parsing logic is unit-tested
-    // here by reproducing the key branches inline.
-    let _ = args;
-    Ok(())
-}
+// Public notification/config surface tests. The actual CLI parser is tested in
+// `src/cli.rs`, next to the parser implementation.
 
 #[test]
 fn notify_type_parsing() {
@@ -67,9 +59,4 @@ fn config_bind_addr() {
     use apprise_mcp::config::McpConfig;
     let cfg = McpConfig::default();
     assert_eq!(cfg.bind_addr(), "0.0.0.0:40050");
-}
-
-#[test]
-fn placeholder_parse_fn_ok() {
-    assert!(parse(&["notify", "hello"]).is_ok());
 }

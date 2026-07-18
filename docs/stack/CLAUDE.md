@@ -1,11 +1,4 @@
-# Technology Stack Documentation -- syslog-mcp
+# Stack documentation notes
 
-Reference documentation for the technology choices, architecture, and prerequisites.
-
-## File index
-
-| File | Purpose |
-| --- | --- |
-| `ARCH.md` | Architecture overview: dual-port design, data flow, module structure |
-| `PRE-REQS.md` | Prerequisites: Rust toolchain, Docker, system dependencies |
-| `TECH.md` | Technology choices: crate selection rationale, SQLite vs alternatives |
+Canonical instructions are in [../../CLAUDE.md](../../CLAUDE.md). This directory
+contains only apprise-rmcp architecture, technology, and prerequisites.

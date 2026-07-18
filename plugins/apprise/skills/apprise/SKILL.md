@@ -1,7 +1,7 @@
 ---
 name: apprise
 description: >
-  Send push notifications through the apprise-mcp server — a standalone Rust MCP bridge to the
+  Send push notifications through apprise-rmcp — a standalone Rust MCP bridge to the
   Apprise universal notification library (Slack, Discord, email, Telegram, and 100+ more).
   Use this skill whenever the user wants to send a notification, push an alert, notify a service,
   fire off a push message, or use Apprise in any way — even if they just say "send me an alert"
@@ -15,7 +15,7 @@ description: >
 # Apprise — Universal Push Notifications
 
 Send notifications through 100+ services (Slack, Discord, email, Telegram, PagerDuty, Pushover,
-and more) via the standalone `apprise-mcp` server. Choose the tier that matches what's available.
+and more) via `apprise-rmcp`. Choose the tier that matches what's available.
 
 ---
 
@@ -97,7 +97,7 @@ apprise(action="help")
 
 ## Tier 2 (Fallback): CLI Binary
 
-Binary: `/home/jmagar/workspace/apprise-mcp/target/release/rapprise`
+Binary: `/home/jmagar/workspace/apprise-rmcp/target/release/rapprise`
 
 ```bash
 # Notify a tag group
@@ -163,10 +163,10 @@ curl "$APPRISE_URL/health"
 
 | Variable | Purpose |
 |----------|---------|
-| `APPRISE_URL` | Apprise API server base URL (required) |
+| `APPRISE_URL` | Apprise API server base URL (optional; default `http://localhost:8000`) |
 | `APPRISE_TOKEN` | Bearer token for Apprise API auth (optional) |
 | `APPRISE_MCP_HOST` | MCP HTTP bind host |
-| `APPRISE_MCP_PORT` | MCP HTTP bind port (default 8765) |
+| `APPRISE_MCP_PORT` | MCP HTTP bind port (default 40050) |
 | `APPRISE_MCP_TOKEN` | Static token for MCP HTTP auth |
 
 ---
@@ -175,5 +175,5 @@ curl "$APPRISE_URL/health"
 
 - **Tag routing:** `tag` targets a pre-configured group of services on the Apprise server. Use when your Apprise config defines named keys like `servers`, `alerts`, `ops`.
 - **Stateless `notify_url`:** bypasses all server config — ideal for one-off or dynamic routing where the destination isn't pre-configured.
-- **Response normalization:** the server returns plain `"OK"` text or JSON; the MCP client normalizes both to `{"ok": true, "response": "OK"}`.
+- **Response representation:** upstream JSON remains structured JSON; non-JSON success is returned as text. Do not assume a synthetic wrapper.
 - **Auth dual-header:** if `APPRISE_TOKEN` is set, both `Authorization: Bearer` and `X-Apprise-API-Key` are sent for compatibility with older Apprise versions.

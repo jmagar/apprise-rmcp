@@ -4,10 +4,11 @@ set -euo pipefail
 
 MODE="auto"
 PULL="false"
-UNIT="${EXAMPLE_MCP_SYSTEMD_UNIT:-example-mcp.service}"
-SERVICE="${EXAMPLE_MCP_DOCKER_SERVICE:-example-mcp}"
-COMPOSE_DIR="${EXAMPLE_MCP_COMPOSE_DIR:-$(pwd)}"
-EXPECTED_BINARY="${EXAMPLE_MCP_EXPECTED_BINARY:-}"
+UNIT="${APPRISE_MCP_SYSTEMD_UNIT:-apprise-mcp.service}"
+SERVICE="${APPRISE_MCP_DOCKER_SERVICE:-apprise-mcp}"
+COMPOSE_DIR="${APPRISE_MCP_COMPOSE_DIR:-$(pwd)}"
+EXPECTED_BINARY="${APPRISE_MCP_EXPECTED_BINARY:-}"
+EXPECTED_IMAGE="${APPRISE_MCP_EXPECTED_IMAGE:-}"
 
 usage() {
   cat <<'EOF'
@@ -24,10 +25,9 @@ Options:
   --service NAME              Docker Compose service/container. Default: example-mcp.
   --compose-dir DIR           Docker Compose project dir. Default: current directory.
   --expected-binary PATH      Systemd: also compare running binary to this path.
+  --expected-image REF        Docker: require the exact immutable image reference.
   -h, --help                  Show this help.
 
-TEMPLATE:
-  Replace EXAMPLE_* env vars, example-mcp, and example binary names when adapting.
 EOF
 }
 
@@ -59,6 +59,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --expected-binary)
       EXPECTED_BINARY="${2:?--expected-binary requires a value}"
+      shift 2
+      ;;
+    --expected-image)
+      EXPECTED_IMAGE="${2:?--expected-image requires a value}"
       shift 2
       ;;
     -h|--help)
@@ -172,7 +176,7 @@ compose_image() {
 }
 
 check_docker() {
-  local cid running_image image local_image repo_digests
+  local cid running_image image local_image repo_digests configured_image
   status_line mode docker
   status_line compose_dir "$COMPOSE_DIR"
   status_line service "$SERVICE"
@@ -192,6 +196,7 @@ check_docker() {
 
   image="$(compose_image)"
   [[ -n "$image" ]] || image="$(docker inspect "$cid" --format '{{.Config.Image}}')"
+  configured_image="$(docker inspect "$cid" --format '{{.Config.Image}}')"
 
   if [[ "$PULL" == "true" && -d "$COMPOSE_DIR" ]]; then
     (cd "$COMPOSE_DIR" && docker compose pull --quiet "$SERVICE")
@@ -203,9 +208,15 @@ check_docker() {
 
   status_line container "$cid"
   status_line image "$image"
+  status_line configured_image "$configured_image"
   status_line running_image_id "$running_image"
   status_line local_image_id "${local_image:-missing}"
   [[ -n "$repo_digests" ]] && status_line repo_digests "$repo_digests"
+
+  if [[ -n "$EXPECTED_IMAGE" && "$configured_image" != "$EXPECTED_IMAGE" ]]; then
+    echo "STALE: configured image does not match expected immutable reference"
+    return 1
+  fi
 
   if [[ -z "$local_image" ]]; then
     echo "FAIL: compose image is not present locally"

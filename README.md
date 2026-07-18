@@ -75,11 +75,16 @@ the short Rust CLI name `rapprise`.
 
 | Path | Command | Best for | Notes |
 |---|---|---|---|
-| npm / npx | `npx -y apprise-rmcp --help` | Local MCP clients and quick trials. | Downloads the matching `rapprise` binary from GitHub Releases. |
-| Release installer | `curl -fsSL https://raw.githubusercontent.com/jmagar/apprise-rmcp/main/scripts/install.sh \| bash` | Host installs without Node. | Installs `rapprise` for the current Linux host. |
+| npm / npx | `npx -y apprise-rmcp --help` | Linux/Windows x86_64 clients. | Verifies the release archive SHA-256 before atomic install. |
+| Release installer | `curl -fsSL https://raw.githubusercontent.com/jmagar/apprise-rmcp/main/scripts/install.sh \| bash` | Linux x86_64 without Node. | Verifies the published SHA-256 before install. |
 | Docker / Compose | `docker compose up -d` | Shared HTTP MCP deployments. | Reads `.env` and exposes container port `40050`. |
 | Build from source | `cargo build --release` | Development and audits. | Produces `target/release/rapprise`. |
-| Plugin | `claude plugin install plugins/apprise` | Claude Code local plugin setup from this checkout. | Uses the packaged setup hook and local runtime metadata. |
+| Plugin | `just plugin-build && claude plugin install ./plugins/apprise` | Claude Code from this checkout. | Bundled `rapprise` stdio plugin. |
+
+Releases publish SHA-256 files and GitHub build-provenance attestations. The
+installers enforce the checksum but do not automatically verify the attestation;
+high-assurance installs should verify it independently or build from source.
+macOS and ARM64 are not currently mapped by the npm launcher.
 
 ### npm / npx
 
@@ -308,8 +313,9 @@ rapprise setup plugin-hook [--no-repair]
 ## Configuration
 
 Configuration loads from `config.toml` when present, then environment variables
-override those values. On startup, the binary also loads `~/.apprise/.env` on
-hosts or `/data/.env` in containers without overriding already-set variables.
+override those values. On startup it loads
+`${APPRISE_HOME:-~/.apprise}/.env` on hosts or `/data/.env` in containers.
+See [the complete inventory](docs/INVENTORY.md).
 
 ### Upstream Variables
 
@@ -331,17 +337,21 @@ hosts or `/data/.env` in containers without overriding already-set variables.
 | `APPRISE_MCP_GOOGLE_CLIENT_ID` | empty | Google OAuth client ID. |
 | `APPRISE_MCP_GOOGLE_CLIENT_SECRET` | empty | Google OAuth client secret. |
 | `APPRISE_MCP_AUTH_ADMIN_EMAIL` | empty | Initial/admin OAuth email. |
+| `APPRISE_MCP_ALLOWED_HOSTS` | empty | Additional accepted HTTP Host values. |
 | `APPRISE_MCP_ALLOWED_ORIGINS` | empty | Additional CORS origins for HTTP MCP. |
+| `APPRISE_MCP_AUTH_ALLOWED_REDIRECT_URIS` | empty | OAuth client redirect URIs. |
 | `RUST_LOG` | `info` | Rust log filter. Stdio logs must stay off stdout. |
 
 ## Authentication
 
 | Policy | When | Effect |
 |---|---|---|
-| Loopback development | `APPRISE_MCP_HOST` starts with `127.` or `APPRISE_MCP_NO_AUTH=true` | No HTTP auth layer is mounted. Use for local testing only. |
-| Static bearer | `APPRISE_MCP_TOKEN` is set and the server is not loopback dev | `/mcp` requires `Authorization: Bearer <token>`. |
-| OAuth | `APPRISE_MCP_AUTH_MODE=oauth` plus Google OAuth settings | `/mcp` uses `lab-auth` OAuth and scoped bearer tokens. |
-| Stdio | `rapprise mcp` | The local child-process boundary is the trust boundary. |
+| Stdio | `rapprise mcp` | Local process trust; HTTP auth does not apply. |
+| Loopback dev | loopback plus no-auth | Permits unauthenticated local HTTP. |
+| Non-loopback no-auth | non-loopback plus no-auth | Invalid; startup must reject it. |
+| Static bearer | bearer plus `APPRISE_MCP_TOKEN` | Require exact bearer token. |
+| OAuth | issuer/client/admin settings | Require OAuth/JWT. |
+| OAuth static control | disable-static true | Static token must not bypass OAuth. |
 
 MCP scopes are `apprise:notify` and `apprise:admin`. OAuth tokens are checked
 before MCP calls are dispatched.
@@ -394,9 +404,9 @@ Notification backends
 | `src/config.rs` | Env/config loading and defaults. |
 | `packages/apprise-rmcp/` | npm launcher and release-binary downloader. |
 
-The thin-shim rule is intentional: MCP and CLI parse inputs, call
-`AppriseService`, and return output. Credential loading, auth policy, and
-Apprise API behavior stay outside the MCP and CLI shims.
+Notification commands and MCP converge on `AppriseService`. The CLI also owns
+setup, doctor, self-install, filesystem, and output orchestration today; it is
+not a pure argument shim.
 
 ## Distribution Contract
 
@@ -406,14 +416,12 @@ Apprise API behavior stay outside the MCP and CLI shims.
 | npm launcher | `packages/apprise-rmcp/package.json`, `bin/rapprise.js`, `lib/platform.js`, `scripts/install.js` | GitHub Release tag and assets named `rapprise-x86_64.tar.gz` and `rapprise-windows-x86_64.tar.gz`. |
 | GitHub Releases | `.github/workflows/*`, `scripts/install.sh`, `install.sh` | Package version, binary name, checksums, supported platforms. |
 | Docker / Compose | `Dockerfile`, `docker-compose*.yml` | Exposed port `40050`, healthcheck `/health`, env file contract. |
-| MCP registry | `server.json` | Server identity `tv.tootie/apprise-mcp`, env vars, transport URL, package version. |
-| Plugin | `plugins/apprise` | Runtime command, setup hook, user config, bundled metadata. |
+| MCP registry | `server.json` | Identity `ai.dinglebear/apprise-rmcp`, stdio package, version. |
+| Plugin | `plugins/apprise` | Bundled `rapprise` stdio and direct setup hook. |
 | Docs | `README.md`, `docs/INVENTORY.md`, `docs/QUICKSTART.md` | Current binary name, default port, action list, and env names. |
 
-Release invariant: npm package version, Rust crate version, `server.json.version`,
-GitHub Release tag, release asset names, and README install examples should move
-together. README examples must use canonical repo and binary names, not older
-aliases.
+Release invariant: npm, crate, registry/server metadata, manifest, GitHub tag,
+and native assets move together. Release Please owns these updates.
 
 ## Development
 

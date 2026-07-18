@@ -1,31 +1,22 @@
 #!/bin/sh
-# entrypoint.sh — Docker entrypoint for apprise-mcp
-# Runs as root, validates config, then exec's the service as 1000:1000
-set -e
+set -eu
 
-SERVICE_NAME="rapprise"
-BINARY="/usr/local/bin/${SERVICE_NAME}"
-
+BINARY="/usr/local/bin/rapprise"
 DATA_DIR="${DATA_DIR:-/data}"
 
-# Validate required env vars (fail fast before dropping privileges)
 if [ -z "${APPRISE_URL:-}" ]; then
-    echo "ERROR: APPRISE_URL is not set — set it to your Apprise API server URL" >&2
+    echo "ERROR: APPRISE_URL is not set" >&2
     exit 1
 fi
-
-# Ensure data directory exists and is owned by the service user
-mkdir -p "${DATA_DIR}"
-chown -R 1000:1000 "${DATA_DIR}"
-chmod 750 "${DATA_DIR}"
-
-# Lock down config files if present
-if [ -f "${DATA_DIR}/config.toml" ]; then
-    chmod 640 "${DATA_DIR}/config.toml"
+if [ ! -d "${DATA_DIR}" ] || [ ! -w "${DATA_DIR}" ]; then
+    echo "ERROR: ${DATA_DIR} must exist and be writable by uid $(id -u)" >&2
+    exit 1
 fi
 if [ -f "${DATA_DIR}/.env" ]; then
-    chmod 600 "${DATA_DIR}/.env"
+    chmod 600 "${DATA_DIR}/.env" || {
+        echo "ERROR: ${DATA_DIR}/.env must be owned by uid $(id -u) so permissions can be secured" >&2
+        exit 1
+    }
 fi
 
-# Drop to service user and exec the binary
-exec gosu 1000:1000 "${BINARY}" "$@"
+exec "${BINARY}" "$@"
