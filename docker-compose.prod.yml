@@ -1,4 +1,3 @@
-name: apprise-mcp
 
 x-common-service: &common-service
   networks: [apprise-mcp]
@@ -19,8 +18,9 @@ x-common-service: &common-service
 services:
   apprise-mcp:
     <<: *common-service
-    image: ${APPRISE_MCP_IMAGE:-ghcr.io/jmagar/apprise-mcp:invalid-set-APPRISE_MCP_IMAGE-to-a-digest}
-    container_name: apprise-mcp
+    image: ghcr.io/jmagar/apprise-rmcp:latest
+    pull_policy: never
+    container_name: rapprise
     env_file:
       - path: .env
         required: false
@@ -37,7 +37,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: 2G
           cpus: "0.5"
 
 networks:
