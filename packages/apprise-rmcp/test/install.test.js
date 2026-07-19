@@ -114,7 +114,7 @@ test("GitHub CLI version gate requires source-ref support", () => {
 
 test("attestation verification pins repository, workflow, tag, and denies self-hosted signers", () => {
   let invocation;
-  const result = verifyAttestation("archive.tar.gz", "archive.sigstore.json", "jmagar/apprise-rmcp", "v1.2.3", (command, args, options) => {
+  const result = verifyAttestation("archive.tar.gz", "archive.sigstore.json", "jmagar/rapprise", "v1.2.3", (command, args, options) => {
     invocation = { command, args, options };
     return { status: 0 };
   });
@@ -122,9 +122,9 @@ test("attestation verification pins repository, workflow, tag, and denies self-h
   assert.equal(invocation.command, "gh");
   assert.deepEqual(invocation.args, [
     "attestation", "verify", "archive.tar.gz",
-    "--repo", "jmagar/apprise-rmcp",
+    "--repo", "jmagar/rapprise",
     "--bundle", "archive.sigstore.json",
-    "--signer-workflow", "jmagar/apprise-rmcp/.github/workflows/release.yml",
+    "--signer-workflow", "jmagar/rapprise/.github/workflows/release.yml",
     "--source-ref", "refs/tags/v1.2.3",
     "--deny-self-hosted-runners",
   ]);
@@ -133,7 +133,7 @@ test("attestation verification pins repository, workflow, tag, and denies self-h
 
 test("attestation verification fails closed", () => {
   assert.throws(
-    () => verifyAttestation("archive.tar.gz", "archive.sigstore.json", "jmagar/apprise-rmcp", "v1.2.3", () => ({ status: 1 })),
+    () => verifyAttestation("archive.tar.gz", "archive.sigstore.json", "jmagar/rapprise", "v1.2.3", () => ({ status: 1 })),
     /provenance verification failed/,
   );
 });

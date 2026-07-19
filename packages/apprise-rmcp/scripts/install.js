@@ -204,7 +204,7 @@ async function main() {
     await download(`${url}.sha256`, checksum, options);
     await download(`${url}.sigstore.json`, bundle, options);
     verifyChecksum(archive, checksum);
-    const repo = process.env.APPRISE_RMCP_REPO || "jmagar/apprise-rmcp";
+    const repo = process.env.APPRISE_RMCP_REPO || "jmagar/rapprise";
     verifyAttestation(archive, bundle, repo, releaseVersion());
     const staged = extractBinary(archive, path.join(tempDir, "staged"), target.binary);
     atomicInstall(staged, destination);

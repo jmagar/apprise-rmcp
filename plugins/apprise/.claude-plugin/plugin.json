@@ -3,7 +3,7 @@
   "name": "apprise-rmcp",
   "description": "Send push notifications via apprise-rmcp, a Rust MCP bridge to Apprise.",
   "author": { "name": "jmagar" },
-  "repository": "https://github.com/jmagar/apprise-rmcp",
+  "repository": "https://github.com/jmagar/rapprise",
   "license": "MIT",
   "keywords": ["apprise", "notifications", "push", "alerts", "mcp"],
   "skills": "./skills"

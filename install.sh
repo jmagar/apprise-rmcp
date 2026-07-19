@@ -8,7 +8,7 @@ if [[ -x "$(dirname "${BASH_SOURCE[0]}")/scripts/install.sh" ]]; then
 fi
 
 version="${APPRISE_RMCP_VERSION:-}"
-repo="${APPRISE_RMCP_REPO:-jmagar/apprise-rmcp}"
+repo="${APPRISE_RMCP_REPO:-jmagar/rapprise}"
 if [[ ! "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
   echo "error: APPRISE_RMCP_VERSION must be an explicit release tag such as v0.1.3" >&2
   exit 1

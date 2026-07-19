@@ -4,9 +4,9 @@
   "title": "Apprise RMCP",
   "description": "Rust MCP server and CLI for Apprise notification fan-out across dozens of delivery backends.",
   "version": "0.2.0",
-  "websiteUrl": "https://github.com/jmagar/apprise-rmcp",
+  "websiteUrl": "https://github.com/jmagar/rapprise",
   "repository": {
-    "url": "https://github.com/jmagar/apprise-rmcp",
+    "url": "https://github.com/jmagar/rapprise",
     "source": "github",
     "id": "1238227302"
   },
@@ -69,8 +69,8 @@
           "format": "string",
           "isRequired": false,
           "isSecret": false,
-          "default": "jmagar/apprise-rmcp",
-          "placeholder": "jmagar/apprise-rmcp"
+          "default": "jmagar/rapprise",
+          "placeholder": "jmagar/rapprise"
         },
         {
           "name": "APPRISE_RMCP_RELEASE_BASE_URL",
@@ -103,7 +103,7 @@
       },
       "buildInfo": {
         "version": "0.2.0",
-        "repository": "https://github.com/jmagar/apprise-rmcp"
+        "repository": "https://github.com/jmagar/rapprise"
       }
     }
   }

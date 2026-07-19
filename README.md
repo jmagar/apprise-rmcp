@@ -116,15 +116,15 @@ then verify both integrity and provenance before running it:
 
 ```bash
 version=v0.1.3
-base="https://github.com/jmagar/apprise-rmcp/releases/download/${version}/rapprise-installer.sh"
+base="https://github.com/jmagar/rapprise/releases/download/${version}/rapprise-installer.sh"
 curl -fsSLO "$base"
 curl -fsSLO "$base.sha256"
 curl -fsSLO "$base.sigstore.json"
 sha256sum --check rapprise-installer.sh.sha256
 gh attestation verify rapprise-installer.sh \
-  --repo jmagar/apprise-rmcp \
+  --repo jmagar/rapprise \
   --bundle rapprise-installer.sh.sigstore.json \
-  --signer-workflow jmagar/apprise-rmcp/.github/workflows/release.yml \
+  --signer-workflow jmagar/rapprise/.github/workflows/release.yml \
   --source-ref "refs/tags/${version}" \
   --deny-self-hosted-runners
 APPRISE_RMCP_VERSION="$version" bash rapprise-installer.sh
@@ -136,7 +136,7 @@ and `gh.exe` is available on `PATH`; provenance verification is not skipped.
 ### Build From Source
 
 ```bash
-git clone https://github.com/jmagar/apprise-rmcp
+git clone https://github.com/jmagar/rapprise
 cd apprise-rmcp
 cargo build --release
 ./target/release/rapprise --help
@@ -522,21 +522,19 @@ rapprise setup check
 
 ## Related Servers
 
-- `unifi-rmcp / rustifi` - UniFi controller REST API bridge.
-- `tailscale-rmcp / rustscale` - Tailscale API bridge for devices, users, and tailnet operations.
-- `unraid-rmcp / unrust` - Unraid GraphQL bridge for NAS and server management.
-- `gotify-rmcp` - Gotify push notification bridge for sends, messages, apps, and clients.
-- `arcane-rmcp` - Arcane Docker management bridge for containers and related resources.
-- `yarr-rmcp` - Media-stack bridge for Sonarr, Radarr, Prowlarr, Plex, and related services.
-- `ytdl-mcp` - Media download and metadata workflow server.
-- `synapse` - Local Synapse workflow server for scout and flux actions.
-- `cortex` - Syslog and homelab log aggregation MCP server.
-- `axon` - RAG, crawl, scrape, extract, and semantic search project.
-- `lab` - Homelab control plane and Labby gateway project.
-- `lumen` - Local semantic code search MCP server.
-- `nugs` - Project/package management helper for local agent workflows.
-- `agentcast` - Agent transcript and activity publishing project.
-- `soma` - RMCP scaffold/runtime template for new provider-backed servers.
+- [soma](https://github.com/jmagar/soma) - RMCP runtime for provider-backed MCP servers.
+- [unifi-rmcp](https://github.com/jmagar/runifi) - UniFi controller REST API bridge.
+- [tailscale-rmcp](https://github.com/jmagar/rtailscale) - Tailscale API bridge for devices, users, and tailnet operations.
+- [unraid-rmcp](https://github.com/jmagar/runraid) - Unraid GraphQL bridge for NAS and server management.
+- [gotify-rmcp](https://github.com/jmagar/rgotify) - Gotify push notification bridge for sends, messages, apps, and clients.
+- [arcane-rmcp](https://github.com/jmagar/rarcane) - Arcane Docker management bridge for containers and related resources.
+- [yarr](https://github.com/jmagar/yarr) - Media-stack bridge for Sonarr, Radarr, Prowlarr, Plex, and related services.
+- [ytdl-rmcp](https://github.com/jmagar/rytdl) - Media download and metadata workflow server.
+- [synapse-rmcp](https://github.com/jmagar/synapse) - Local Synapse workflow server for scout and flux actions.
+- [cortex](https://github.com/jmagar/cortex) - Syslog and homelab log aggregation MCP server.
+- [axon](https://github.com/jmagar/axon) - RAG, crawl, scrape, extract, and semantic search project.
+- [labby](https://github.com/jmagar/labby) - Homelab control plane and MCP gateway project.
+- [lumen](https://github.com/jmagar/lumen) - Local semantic code search MCP server.
 
 ## Documentation
 

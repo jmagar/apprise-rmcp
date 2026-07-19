@@ -9,8 +9,8 @@ edition = "2021"
 rust-version = "1.90"
 categories = ["command-line-utilities", "development-tools"]
 keywords = ["mcp", "apprise", "notifications", "rmcp", "homelab"]
-repository = "https://github.com/jmagar/apprise-rmcp"
-homepage = "https://github.com/jmagar/apprise-rmcp#readme"
+repository = "https://github.com/jmagar/rapprise"
+homepage = "https://github.com/jmagar/rapprise#readme"
 description = "Rust MCP server and CLI for Apprise notification fan-out across delivery backends with stdio/HTTP transports and auth."
 autobins = false
 

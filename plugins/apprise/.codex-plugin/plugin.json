@@ -1,8 +1,8 @@
 {
   "name": "apprise-rmcp",
   "description": "Apprise RMCP server — universal push notification bridge for Codex.",
-  "homepage": "https://github.com/jmagar/apprise-rmcp",
-  "repository": "https://github.com/jmagar/apprise-rmcp",
+  "homepage": "https://github.com/jmagar/rapprise",
+  "repository": "https://github.com/jmagar/rapprise",
   "license": "MIT",
   "keywords": [
     "apprise",
@@ -23,7 +23,7 @@
       "Read",
       "Write"
     ],
-    "websiteURL": "https://github.com/jmagar/apprise-rmcp",
+    "websiteURL": "https://github.com/jmagar/rapprise",
     "defaultPrompt": [
       "Send an alert to all configured Apprise notification services.",
       "Notify the ops-alerts tag that a deployment completed successfully.",

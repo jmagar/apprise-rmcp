@@ -6,7 +6,7 @@ have `gh.exe` on `PATH`. `APPRISE_URL` is optional and defaults to
 `http://localhost:8000`.
 
 ```bash
-git clone https://github.com/jmagar/apprise-rmcp
+git clone https://github.com/jmagar/rapprise
 cd apprise-rmcp
 cargo build --release
 ./target/release/rapprise health --json

@@ -18,7 +18,7 @@ x-common-service: &common-service
 services:
   apprise-mcp:
     <<: *common-service
-    image: ghcr.io/jmagar/apprise-rmcp:latest
+    image: ghcr.io/jmagar/rapprise:latest
     pull_policy: never
     container_name: rapprise
     env_file:

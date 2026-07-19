@@ -39,7 +39,7 @@ test "$(jq -r '.mcpServers.apprise.command' plugins/apprise/.mcp.json)" = \
 test -z "$(find .claude/plugins/apprise-mcp -type f -print 2>/dev/null)"
 
 grep -F 'gh attestation verify rapprise-installer.sh' README.md >/dev/null
-if grep -F 'raw.githubusercontent.com/jmagar/apprise-rmcp' README.md >/dev/null; then
+if grep -F 'raw.githubusercontent.com/jmagar/rapprise' README.md >/dev/null; then
   echo "README must not execute unverified raw installer content" >&2
   exit 1
 fi

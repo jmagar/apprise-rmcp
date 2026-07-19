@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="${APPRISE_RMCP_REPO:-jmagar/apprise-rmcp}"
+REPO="${APPRISE_RMCP_REPO:-jmagar/rapprise}"
 INSTALL_DIR="${INSTALL_DIR:-${HOME}/.local/bin}"
 VERSION="${APPRISE_RMCP_VERSION:-}"
 RELEASE_BASE_URL="${APPRISE_RMCP_RELEASE_BASE_URL:-}"
@@ -18,7 +18,7 @@ Install a checksum- and provenance-verified rapprise release archive.
 Environment:
   APPRISE_RMCP_VERSION     Required immutable release tag, for example v0.1.3
   INSTALL_DIR              Destination directory (default: ~/.local/bin)
-  APPRISE_RMCP_REPO        GitHub repo owner/name (default: jmagar/apprise-rmcp)
+  APPRISE_RMCP_REPO        GitHub repo owner/name (default: jmagar/rapprise)
   APPRISE_RMCP_RELEASE_BASE_URL  Test/mirror base URL
 
 Requires GitHub CLI 2.68+ for offline attestation verification.

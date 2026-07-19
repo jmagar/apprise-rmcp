@@ -3,14 +3,14 @@
   "version": "0.2.0",
   "description": "Node launcher for the Apprise Rust MCP server and rapprise CLI for multi-backend notifications.",
   "license": "MIT",
-  "homepage": "https://github.com/jmagar/apprise-rmcp#readme",
+  "homepage": "https://github.com/jmagar/rapprise#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/jmagar/apprise-rmcp.git",
+    "url": "git+https://github.com/jmagar/rapprise.git",
     "directory": "packages/apprise-rmcp"
   },
   "bugs": {
-    "url": "https://github.com/jmagar/apprise-rmcp/issues"
+    "url": "https://github.com/jmagar/rapprise/issues"
   },
   "bin": {
     "apprise-rmcp": "bin/rapprise.js",
@@ -20,12 +20,16 @@
     "bin/",
     "lib/",
     "scripts/",
-    "README.md"
+    "README.md",
+    "LICENSE*",
+    "package.json"
   ],
   "scripts": {
+    "prepack": "node scripts/sync-readme.js",
     "postinstall": "node scripts/install.js",
     "test": "node --test",
-    "check": "node --check bin/rapprise.js && node --check scripts/install.js && node --check lib/platform.js"
+    "check": "node --check bin/rapprise.js && node --check scripts/install.js && node --check lib/platform.js && node --check scripts/sync-readme.js && node --check scripts/check-package.js && node scripts/check-package.js",
+    "prepublishOnly": "node scripts/check-package.js --release"
   },
   "engines": {
     "node": ">=18"
@@ -51,5 +55,9 @@
     "stdio"
   ],
   "mcpName": "ai.dinglebear/apprise-rmcp",
-  "binaryVersion": "0.2.0"
+  "binaryVersion": "0.2.0",
+  "author": {
+    "name": "dinglebear.ai",
+    "url": "https://dinglebear.ai"
+  }
 }

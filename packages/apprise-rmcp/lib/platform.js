@@ -34,7 +34,7 @@ function releaseVersion(env = process.env) {
 }
 
 function releaseBaseUrl(env = process.env) {
-  const repo = env.APPRISE_RMCP_REPO || "jmagar/apprise-rmcp";
+  const repo = env.APPRISE_RMCP_REPO || "jmagar/rapprise";
   return env.APPRISE_RMCP_RELEASE_BASE_URL || `https://github.com/${repo}/releases/download`;
 }
 

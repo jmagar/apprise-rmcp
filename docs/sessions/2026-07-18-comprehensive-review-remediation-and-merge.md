@@ -1,11 +1,11 @@
 ---
 date: 2026-07-18 19:28:34 EST
-repo: git@github.com:jmagar/apprise-rmcp.git
+repo: git@github.com:jmagar/rapprise.git
 branch: main
 head: f3adde2af113491f1e46576ec5153f60fa681f6d
 working directory: /home/jmagar/workspace/apprise-rmcp
 worktree: /home/jmagar/workspace/apprise-rmcp
-pr: "#5 fix: remediate comprehensive repository review (https://github.com/jmagar/apprise-rmcp/pull/5)"
+pr: "#5 fix: remediate comprehensive repository review (https://github.com/jmagar/rapprise/pull/5)"
 beads: apprise-mcp-75w, apprise-mcp-75w.1 through apprise-mcp-75w.42, apprise-mcp-60m, apprise-mcp-d3m, apprise-mcp-9yy, apprise-mcp-i6m, apprise-mcp-tme
 ---
 
@@ -228,7 +228,7 @@ All review and follow-up Beads were created/claimed as applicable, resolved, ver
 | `gh pr merge 5 --squash` | PR #5 merged as `a8f31ef` |
 | `git fetch --prune origin` | Remote refs synchronized and stale review ref pruned |
 | `gh run view 29646411340` | Docker publication completed successfully |
-| `gh api repos/jmagar/apprise-rmcp/dependabot/alerts/1` | Alert state `fixed` |
+| `gh api repos/jmagar/rapprise/dependabot/alerts/1` | Alert state `fixed` |
 | `repo_context.sh --json --include-gh` | One worktree; `main` ahead 0/behind 0 |
 | `git rebase origin/main` | Rebased the one-file session commit over concurrently merged PRs #3/#4 |
 | `git push origin --delete openwiki/update release-please--branches--main--components--apprise-rmcp` | Removed topic branches after both PRs were proven merged |
@@ -289,10 +289,10 @@ All review and follow-up Beads were created/claimed as applicable, resolved, ver
 
 ## References
 
-- [PR #5: comprehensive repository review remediation](https://github.com/jmagar/apprise-rmcp/pull/5)
-- [Successful fixed multi-architecture Docker publication](https://github.com/jmagar/apprise-rmcp/actions/runs/29646411340)
-- [Merged Release Please PR #3](https://github.com/jmagar/apprise-rmcp/pull/3)
-- [Merged OpenWiki PR #4](https://github.com/jmagar/apprise-rmcp/pull/4)
+- [PR #5: comprehensive repository review remediation](https://github.com/jmagar/rapprise/pull/5)
+- [Successful fixed multi-architecture Docker publication](https://github.com/jmagar/rapprise/actions/runs/29646411340)
+- [Merged Release Please PR #3](https://github.com/jmagar/rapprise/pull/3)
+- [Merged OpenWiki PR #4](https://github.com/jmagar/rapprise/pull/4)
 - [GHSA-3rjw-m598-pq24](https://github.com/advisories/GHSA-3rjw-m598-pq24)
 
 ## Next Steps
