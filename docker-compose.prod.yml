@@ -43,3 +43,4 @@ services:
 networks:
   apprise-mcp:
     name: ${DOCKER_NETWORK:-apprise-mcp}
+    external: true
