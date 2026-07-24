@@ -7,6 +7,10 @@ on:
 permissions:
   contents: read
 
+env:
+  CARGO_INCREMENTAL: "0"
+  SOLDR_CACHE_DIR: ${{ github.workspace }}/../.soldr-cache
+
 jobs:
   release-meta:
     runs-on: [self-hosted, unraid]
@@ -43,7 +47,8 @@ jobs:
         env:
           EXPECTED_VERSION: ${{ needs.release-meta.outputs.tag_name }}
         run: bash scripts/check-version-sync.sh
-      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+      - name: Install Rust + soldr
+        uses: ./.github/actions/setup-rust-soldr
         with:
           components: rustfmt,clippy
       - uses: taiki-e/install-action@6d9ce389421e24f7b73aff5e841bbe5a6b4c974c # nextest
@@ -93,12 +98,10 @@ jobs:
         with:
           ref: ${{ needs.release-meta.outputs.tag_name }}
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+      - name: Install Rust + soldr
+        uses: ./.github/actions/setup-rust-soldr
         with:
           targets: ${{ matrix.target }}
-      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
-        with:
-          key: ${{ matrix.target }}
       - uses: taiki-e/install-action@6d9ce389421e24f7b73aff5e841bbe5a6b4c974c # nextest
         if: matrix.target == 'x86_64-pc-windows-msvc'
         with:
