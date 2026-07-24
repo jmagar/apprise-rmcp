@@ -22,7 +22,11 @@ jobs:
           cache: npm
           cache-dependency-path: scripts/openwiki/package-lock.json
       - name: Install locked OpenWiki without lifecycle scripts
-        run: npm ci --ignore-scripts --no-audit --no-fund --prefix scripts/openwiki
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund --prefix scripts/openwiki
+          # --ignore-scripts skips better-sqlite3's native build; rebuild only
+          # that module or OpenWiki dies with "Could not locate the bindings file".
+          npm rebuild --prefix scripts/openwiki better-sqlite3
       - name: Stage reviewed toolchain
         run: tar -C scripts/openwiki -czf openwiki-toolchain.tar.gz node_modules package.json package-lock.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
